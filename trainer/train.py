@@ -1,13 +1,11 @@
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
     accuracy_score, roc_auc_score, classification_report,
     confusion_matrix, roc_curve, precision_recall_curve,
     average_precision_score
 )
+from trainer.model_factory import ModelFactory
 
 class ModelTrainer:
     """모델 학습 및 평가를 담당하는 클래스"""
@@ -15,34 +13,16 @@ class ModelTrainer:
     def __init__(self, config, label_encoder):
         self.config = config
         self.label_encoder = label_encoder
-        self.models = self._initialize_models()
+        self.model_factory = ModelFactory(config)
+        self.models = self.model_factory.create_models()
         self.trained_models = {}
         self.results = {}
         self.prediction_results = {}
     
-    def _initialize_models(self):
-        """모델 초기화"""
-        return {
-            "LR": LogisticRegression(
-                random_state=self.config.RANDOM_STATE,
-                max_iter=self.config.MAX_ITER,
-                solver='liblinear'
-            ),
-            "SVM": SVC(
-                probability=True,
-                random_state=self.config.RANDOM_STATE,
-                C=1.0
-            ),
-            "RF": RandomForestClassifier(
-                random_state=self.config.RANDOM_STATE,
-                n_jobs=-1,
-                n_estimators=self.config.N_ESTIMATORS
-            )
-        }
-    
     def train_and_evaluate(self, X_train, y_train, X_val=None, y_val=None):
         """모든 모델 학습 및 평가"""
         print("--- 모델 학습 시작 ---")
+        print(f"  사용할 모델: {list(self.models.keys())}")
         
         if X_train.empty or len(y_train) == 0:
             print("  오류: 학습 데이터가 비어있습니다.")

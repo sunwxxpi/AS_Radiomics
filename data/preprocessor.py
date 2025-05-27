@@ -2,8 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.impute import SimpleImputer
-from sklearn.feature_selection import SelectFromModel
-from sklearn.linear_model import LassoCV
+from trainer.feature_selector import FeatureSelector
 
 class DataPreprocessor:
     """데이터 전처리를 담당하는 클래스"""
@@ -13,7 +12,7 @@ class DataPreprocessor:
         self.label_encoder = LabelEncoder()
         self.scaler = StandardScaler()
         self.imputer = SimpleImputer(strategy='mean')
-        self.feature_selector = None
+        self.feature_selector = FeatureSelector(config)
     
     def prepare_data(self, train_df, val_df=None):
         """전체 데이터 전처리 파이프라인"""
@@ -36,7 +35,7 @@ class DataPreprocessor:
         X_val_scaled = self._scale_features(X_val_imputed, fit=False) if not X_val_imputed.empty else pd.DataFrame()
         
         # 5. 특징 선택
-        X_train_selected, X_val_selected = self._select_features(X_train_scaled, y_train_encoded, X_val_scaled)
+        X_train_selected, X_val_selected = self.feature_selector.select_features(X_train_scaled, y_train_encoded, X_val_scaled)
         
         print("--- 데이터 전처리 완료 ---\n")
         
@@ -55,7 +54,10 @@ class DataPreprocessor:
         if 'severity' not in df.columns:
             raise ValueError("DataFrame에 'severity' 컬럼이 없습니다.")
         
-        X = df.drop('severity', axis=1)
+        X = df.drop('severity', axis=1) 
+        if 'as_grade' in X.columns:
+            X = X.drop('as_grade', axis=1)
+            
         y = df['severity'].copy()
         
         return X, y
@@ -125,67 +127,3 @@ class DataPreprocessor:
             )
         
         return X_scaled
-    
-    def _select_features(self, X_train, y_train, X_val=None):
-        """특징 선택 (LassoCV)"""
-        print("--- 특징 선택 시작 ---")
-        
-        if X_train.empty or len(y_train) == 0:
-            print("  경고: 데이터가 비어있어 특징 선택을 건너뜁니다.")
-            return X_train, X_val if X_val is not None else pd.DataFrame()
-        
-        min_class_count = np.min(np.bincount(y_train)) if len(np.unique(y_train)) > 1 else 0
-        cv_folds = min(self.config.CV_FOLDS, max(2, min_class_count))
-        
-        if min_class_count < 2 or X_train.shape[0] < cv_folds:
-            print("  경고: 샘플 수 부족으로 특징 선택을 건너뜁니다.")
-            return X_train, X_val if X_val is not None else pd.DataFrame()
-        
-        try:
-            print(f"  LassoCV 특징 선택 시작 (CV folds: {cv_folds})...")
-            
-            lasso_cv = LassoCV(
-                cv=cv_folds,
-                random_state=self.config.RANDOM_STATE,
-                max_iter=10000,
-                n_jobs=-1,
-                tol=self.config.LASSO_TOLERANCE,
-                n_alphas=self.config.LASSO_ALPHA_COUNT
-            )
-            
-            self.feature_selector = SelectFromModel(
-                estimator=lasso_cv,
-                threshold=self.config.FEATURE_THRESHOLD
-            )
-            
-            self.feature_selector.fit(X_train, y_train)
-            
-            # 선택된 특징으로 변환
-            selected_features = self.feature_selector.get_support(indices=True)
-            selected_feature_names = X_train.columns[selected_features]
-            
-            if len(selected_feature_names) == 0:
-                print("  경고: 선택된 특징이 없어 모든 특징을 사용합니다.")
-                return X_train, X_val if X_val is not None else pd.DataFrame()
-            
-            X_train_selected = pd.DataFrame(
-                self.feature_selector.transform(X_train),
-                columns=selected_feature_names,
-                index=X_train.index
-            )
-            
-            X_val_selected = pd.DataFrame()
-            if X_val is not None and not X_val.empty:
-                X_val_selected = pd.DataFrame(
-                    self.feature_selector.transform(X_val),
-                    columns=selected_feature_names,
-                    index=X_val.index
-                )
-            
-            print(f"  특징 선택 완료: {X_train.shape[1]} → {len(selected_feature_names)}")
-            return X_train_selected, X_val_selected
-            
-        except Exception as e:
-            print(f"  특징 선택 오류: {e}")
-            print("  모든 특징을 사용합니다.")
-            return X_train, X_val if X_val is not None else pd.DataFrame()

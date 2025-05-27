@@ -4,8 +4,9 @@ import pandas as pd
 class FileHandler:
     """파일 저장을 담당하는 클래스"""
     
-    def __init__(self, output_dir):
+    def __init__(self, output_dir, feature_selection_method='unknown'):
         self.output_dir = output_dir
+        self.feature_selection_method = feature_selection_method
     
     def save_features_to_csv(self, df, filename, df_name):
         """특징 DataFrame을 CSV로 저장"""
@@ -68,11 +69,14 @@ class FileHandler:
         else:
             print("  저장할 예측 결과가 없습니다.")
     
-    def save_model_summary(self, results, filename):
+    def save_model_summary(self, results, filename=None):
         """모델 성능 요약을 CSV로 저장"""
         if not results:
             print("  요약할 모델 평가 결과가 없습니다.")
             return
+        
+        if filename is None:
+            filename = 'model_validation_summary.csv'
         
         results_summary_df = pd.DataFrame({
             model_name: {

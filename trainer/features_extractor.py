@@ -16,7 +16,7 @@ class RadiomicsExtractor:
         logger = logging.getLogger("radiomics")
         logger.setLevel(logging.ERROR)
     
-    def extract_features_for_set(self, image_dir, label_dir, set_name, severity_mapping):
+    def extract_features_for_set(self, image_dir, label_dir, set_name, patient_info_map):
         """특정 데이터셋에 대한 특징 추출"""
         print(f"\n  '{set_name}' 세트 특징 추출 시작...")
         
@@ -40,7 +40,7 @@ class RadiomicsExtractor:
         for image_filename in image_files:
             result = self._process_single_case(
                 image_filename, image_dir, label_dir, 
-                severity_mapping, set_name
+                patient_info_map, set_name
             )
             
             if result['success']:
@@ -62,7 +62,7 @@ class RadiomicsExtractor:
         
         return features_df
     
-    def _process_single_case(self, image_filename, image_dir, label_dir, severity_mapping, set_name):
+    def _process_single_case(self, image_filename, image_dir, label_dir, patient_info_map, set_name):
         """단일 케이스 처리"""
         print(f"\n    [{set_name}] 파일 처리: {image_filename}")
         
@@ -76,13 +76,19 @@ class RadiomicsExtractor:
         sequence_part = match.group(2).strip()
         case_id = f"{patient_id}_{sequence_part}"
         
-        # 중증도 매핑 확인
-        if patient_id not in severity_mapping:
-            print(f"      건너뛰기: ID '{patient_id}'를 매핑에서 찾을 수 없음")
+        # 환자 정보 확인
+        patient_data = patient_info_map.get(patient_id)
+        if not patient_data:
+            print(f"      건너뛰기: ID '{patient_id}'를 환자 정보 맵에서 찾을 수 없음")
             return {'success': False, 'case_id': patient_id}
         
-        severity = severity_mapping[patient_id]
-        
+        severity = patient_data.get('AV_binaryclassification')
+        as_grade = patient_data.get('AS_grade', 'Unknown')
+
+        if severity is None:
+            print(f"      건너뛰기: ID '{patient_id}'에 대한 'AV_binaryclassification' 정보 없음")
+            return {'success': False, 'case_id': patient_id}
+
         # 파일 경로 설정
         image_path = os.path.join(image_dir, image_filename)
         label_path = os.path.join(label_dir, f"{case_id}.nii.gz")
@@ -97,8 +103,9 @@ class RadiomicsExtractor:
             features = {key: val for key, val in result.items() if not key.startswith('diagnostics_')}
             features['case_id'] = case_id
             features['severity'] = severity
+            features['as_grade'] = as_grade
             
-            print(f"      성공: {len(features)-2}개 특징 추출")
+            print(f"      성공: {len(features)-3}개 radiomics 특징, severity, as_grade 추출")
             return {'success': True, 'case_id': case_id, 'features': features}
             
         except Exception as e:

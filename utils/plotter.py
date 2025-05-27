@@ -50,7 +50,7 @@ class ResultPlotter:
             plt.legend(loc="lower right", fontsize=12)
             plt.grid(alpha=0.3)
             
-            filename = os.path.join(self.output_dir, f'lasso_fs_{model_name}_ROC_curve.png')
+            filename = os.path.join(self.output_dir, f'{model_name}_ROC_curve.png')
             plt.savefig(filename)
             plt.close()
             
@@ -78,7 +78,7 @@ class ResultPlotter:
             plt.legend(loc="best", fontsize=12)
             plt.grid(alpha=0.3)
             
-            filename = os.path.join(self.output_dir, f'lasso_fs_{model_name}_PR_curve.png')
+            filename = os.path.join(self.output_dir, f'{model_name}_PR_curve.png')
             plt.savefig(filename)
             plt.close()
             
@@ -102,7 +102,7 @@ class ResultPlotter:
             plt.ylabel('True Label', fontsize=14)
             plt.tight_layout()
             
-            filename = os.path.join(self.output_dir, f'lasso_fs_{model_name}_CM_normalized.png')
+            filename = os.path.join(self.output_dir, f'{model_name}_CM_normalized.png')
             plt.savefig(filename)
             plt.close()
             
@@ -116,7 +116,7 @@ class ResultPlotter:
             plt.ylabel('True Label', fontsize=14)
             plt.tight_layout()
             
-            filename = os.path.join(self.output_dir, f'lasso_fs_{model_name}_CM_raw.png')
+            filename = os.path.join(self.output_dir, f'{model_name}_CM_raw.png')
             plt.savefig(filename)
             plt.close()
             
