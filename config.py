@@ -1,4 +1,5 @@
 import os
+import datetime
 
 class Config:
     """프로젝트 설정을 관리하는 클래스"""
@@ -111,15 +112,16 @@ class Config:
     
     @classmethod
     def ensure_output_dir(cls):
-        """특징 선택 방법에 따른 출력 디렉토리 생성"""
-        output_dir = os.path.join(cls.BASE_OUTPUT_DIR, f'{cls.FEATURE_SELECTION_METHOD}_fs')
+        """특징 선택 방법과 실행 시간에 따른 출력 디렉토리 생성"""
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_dir = os.path.join(cls.BASE_OUTPUT_DIR, f'{cls.FEATURE_SELECTION_METHOD}_fs_{timestamp}')
         os.makedirs(output_dir, exist_ok=True)
         return output_dir
     
     @classmethod
     def get_output_dir(cls):
         """현재 설정에 따른 출력 디렉토리 경로 반환"""
-        return os.path.join(cls.BASE_OUTPUT_DIR, f'{cls.FEATURE_SELECTION_METHOD}_fs')
+        return os.path.join(cls.BASE_OUTPUT_DIR, f'{cls.FEATURE_SELECTION_METHOD}_fs_[TIMESTAMP]')
 
     @classmethod
     def get_available_feature_methods(cls):
