@@ -7,8 +7,9 @@ from radiomics import featureextractor
 class RadiomicsExtractor:
     """Radiomics 특징 추출을 담당하는 클래스"""
     
-    def __init__(self):
+    def __init__(self, geometry_tolerance=1e-5):
         self.extractor = featureextractor.RadiomicsFeatureExtractor()
+        self.extractor.settings['geometryTolerance'] = geometry_tolerance
         self._setup_logging()
     
     def _setup_logging(self):
