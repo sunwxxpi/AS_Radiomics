@@ -13,90 +13,73 @@ from utils.file_handler import FileHandler
 from trainer.features_extractor import RadiomicsExtractor
 from trainer.train import ModelTrainer
 
-def main():
+def run_pipeline(mode):
+    """지정된 모드로 전체 파이프라인 실행"""
     # 설정 및 로깅 초기화
-    config = Config()
-    output_dir = config.ensure_output_dir()
-    setup_logging(output_dir)
+    Config.CLASSIFICATION_MODE = mode
+    
+    output_dir = Config.ensure_output_dir()
+    logger = setup_logging(output_dir)
     
     try:
-        print("--- Radiomics 분석 파이프라인 시작 ---\n")
+        print(f"--- Radiomics 분석 파이프라인 시작 (모드: {mode}) ---\n")
         
         # 설정 요약 출력
-        config.print_config_summary()
-        
-        print(f"\n사용 가능한 특징 선택 방법: {config.get_available_feature_methods()}")
-        print(f"사용 가능한 분류 모델: {config.get_available_classification_models()}")
+        Config.print_config_summary()
         
         # 1. 데이터 로딩
         print("\n--- 1. 데이터 로딩 ---")
-        data_loader = DataLoader(config.LABEL_FILE)
-        patient_info_map = data_loader.load_labels()
+        data_loader = DataLoader(Config.LABEL_FILE)
+        patient_info_map = data_loader.load_labels(mode)
         
         # 2. 특징 추출
         print("\n--- 2. Radiomics 특징 추출 ---")
         extractor = RadiomicsExtractor()
         
         train_features_df = extractor.extract_features_for_set(
-            config.IMAGE_TR_DIR, config.LABEL_TR_DIR, "Train", patient_info_map
+            Config.IMAGE_TR_DIR, Config.LABEL_TR_DIR, "Train", patient_info_map, mode
         )
         
         val_features_df = extractor.extract_features_for_set(
-            config.IMAGE_VAL_DIR, config.LABEL_VAL_DIR, "Validation", patient_info_map
+            Config.IMAGE_VAL_DIR, Config.LABEL_VAL_DIR, "Validation", patient_info_map, mode
         )
         
         if train_features_df.empty:
             print("\n오류: 학습 세트에서 특징 추출 실패. 프로그램을 종료합니다.")
             return
 
-        # 실제 데이터셋의 'AS_grade' 분포 출력
-        if not train_features_df.empty and 'as_grade' in train_features_df.columns:
-            print("\n--- 학습 데이터셋 'AS_grade' 분포 ---")
-            train_as_distribution = train_features_df['as_grade'].value_counts(dropna=False).sort_index()
-            print(train_as_distribution)
+        # 실제 데이터셋의 'severity' 분포 출력
+        if not train_features_df.empty and 'severity' in train_features_df.columns:
+            print("\n--- 학습 데이터셋 'severity' 분포 ---")
+            train_severity_distribution = train_features_df['severity'].value_counts(dropna=False).sort_index()
+            print(train_severity_distribution)
             print(f"총 학습 케이스 수: {len(train_features_df)}")
 
-        if not val_features_df.empty and 'as_grade' in val_features_df.columns:
-            print("\n--- 검증 데이터셋 'AS_grade' 분포 ---")
-            val_as_distribution = val_features_df['as_grade'].value_counts(dropna=False).sort_index()
-            print(val_as_distribution)
+        if not val_features_df.empty and 'severity' in val_features_df.columns:
+            print("\n--- 검증 데이터셋 'severity' 분포 ---")
+            val_severity_distribution = val_features_df['severity'].value_counts(dropna=False).sort_index()
+            print(val_severity_distribution)
             print(f"총 검증 케이스 수: {len(val_features_df)}")
-
-        # 전체 데이터셋 분포 (학습 + 검증)
-        if not train_features_df.empty or not val_features_df.empty:
-            all_features_list = []
-            if not train_features_df.empty and 'as_grade' in train_features_df.columns:
-                all_features_list.extend(train_features_df['as_grade'].tolist())
-            if not val_features_df.empty and 'as_grade' in val_features_df.columns:
-                all_features_list.extend(val_features_df['as_grade'].tolist())
-            
-            if all_features_list:
-                import pandas as pd
-                combined_as_series = pd.Series(all_features_list)
-                print("\n--- 전체 데이터셋 (학습+검증) 'AS_grade' 분포 ---")
-                combined_as_distribution = combined_as_series.value_counts(dropna=False).sort_index()
-                print(combined_as_distribution)
-                print(f"전체 케이스 수: {len(combined_as_series)}")
         
         # 3. 특징 저장
-        file_handler = FileHandler(output_dir, config.FEATURE_SELECTION_METHOD)
+        file_handler = FileHandler(output_dir, Config.FEATURE_SELECTION_METHOD)
         file_handler.save_features_to_csv(
-            train_features_df, 'extracted_radiomics_features_train.csv', "학습"
+            train_features_df, f'extracted_radiomics_features_train_{mode}.csv', "학습"
         )
         
         if not val_features_df.empty:
             file_handler.save_features_to_csv(
-                val_features_df, 'extracted_radiomics_features_val.csv', "검증"
+                val_features_df, f'extracted_radiomics_features_val_{mode}.csv', "검증"
             )
         
         # 4. 데이터 전처리
         print("\n--- 3. 데이터 전처리 ---")
-        preprocessor = DataPreprocessor(config)
+        preprocessor = DataPreprocessor(Config)  # Config 클래스 전달
         processed_data = preprocessor.prepare_data(train_features_df, val_features_df)
         
         # 5. 모델 학습 및 평가
         print("\n--- 4. 모델 학습 및 평가 ---")
-        trainer = ModelTrainer(config, preprocessor.label_encoder)
+        trainer = ModelTrainer(Config, preprocessor.label_encoder)  # Config 클래스 전달
         results, prediction_results = trainer.train_and_evaluate(
             processed_data['X_train'], processed_data['y_train'],
             processed_data['X_val'], processed_data['y_val']
@@ -110,11 +93,11 @@ def main():
         # 7. 결과 저장
         print("\n--- 6. 결과 저장 ---")
         file_handler.save_prediction_results(
-            prediction_results, 'test_cases_prediction_results.csv'
+            prediction_results, f'test_cases_prediction_results_{mode}.csv'
         )
-        file_handler.save_model_summary(results)
+        file_handler.save_model_summary(results, f'model_validation_summary_{mode}.csv')
         
-        print(f"\n모든 분석 과정 완료. 결과는 '{output_dir}' 폴더에 저장되었습니다.")
+        print(f"\n{mode} 모드 분석 과정 완료. 결과는 '{output_dir}' 폴더에 저장되었습니다.")
         
     except Exception as e:
         print(f"오류 발생: {e}")
@@ -123,6 +106,19 @@ def main():
     
     finally:
         close_logging()
+        return logger
+
+def main():
+    # 두 가지 모드로 파이프라인 실행
+    print("===== Binary 분류 모드로 파이프라인 실행 =====")
+    binary_logger = run_pipeline('binary')
+    
+    print("\n\n===== Multi-class 분류 모드로 파이프라인 실행 =====")
+    run_pipeline('multi')
+    
+    # binary 모드의 로거 복원 (multi 모드에서 변경되었을 수 있음)
+    if binary_logger:
+        sys.stdout = binary_logger.terminal
 
 if __name__ == "__main__":
     main()

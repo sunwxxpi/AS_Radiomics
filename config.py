@@ -5,7 +5,8 @@ class Config:
     """프로젝트 설정을 관리하는 클래스"""
     
     # 경로 설정
-    BASE_DIR = '/home/psw/AVS-Diagnosis/Dataset003_KMU_Cardiac_AVC'
+    BASE_DIR = '/home/psw/AVS-Diagnosis/Dataset002_KMU_Chest_AVC'
+    # BASE_DIR = '/home/psw/AVS-Diagnosis/Dataset003_KMU_Cardiac_AVC'
     LABEL_FILE = './data/AS_CRF_radiomics.csv'
     BASE_OUTPUT_DIR = './radiomics_analysis_results'
     
@@ -13,6 +14,9 @@ class Config:
     LABEL_TR_DIR = os.path.join(BASE_DIR, 'labelsTr')
     IMAGE_VAL_DIR = os.path.join(BASE_DIR, 'imagesVal')
     LABEL_VAL_DIR = os.path.join(BASE_DIR, 'labelsVal')
+    
+    # 분류 모드 설정 (binary 또는 multi)
+    CLASSIFICATION_MODE = 'binary'  # 기본값은 binary 분류
     
     # 모델 하이퍼파라미터
     RANDOM_STATE = 42
@@ -111,17 +115,45 @@ class Config:
     NB_VAR_SMOOTHING = 1e-9       # 분산 스무딩 파라미터
     
     @classmethod
+    def _get_dataset_type(cls):
+        """BASE_DIR 경로에 따라 데이터셋 종류 결정"""
+        if 'Chest' in cls.BASE_DIR:
+            return 'chest'
+        elif 'Cardiac' in cls.BASE_DIR:
+            return 'cardiac'
+        else:
+            return 'unknown'
+    
+    @classmethod
     def ensure_output_dir(cls):
-        """특징 선택 방법과 실행 시간에 따른 출력 디렉토리 생성"""
+        """특징 선택 방법과 실행 시간, 분류 모드에 따른 출력 디렉토리 생성"""
         timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_dir = os.path.join(cls.BASE_OUTPUT_DIR, f'{cls.FEATURE_SELECTION_METHOD}_fs_{timestamp}')
+        mode_suffix = "_binary" if cls.CLASSIFICATION_MODE == 'binary' else "_multi"
+        
+        # 데이터셋 타입에 따라 하위 디렉토리 결정
+        dataset_type = cls._get_dataset_type()
+        
+        output_dir = os.path.join(
+            cls.BASE_OUTPUT_DIR,
+            dataset_type,
+            f'{cls.FEATURE_SELECTION_METHOD}_fs_{timestamp}{mode_suffix}'
+        )
         os.makedirs(output_dir, exist_ok=True)
         return output_dir
     
     @classmethod
     def get_output_dir(cls):
         """현재 설정에 따른 출력 디렉토리 경로 반환"""
-        return os.path.join(cls.BASE_OUTPUT_DIR, f'{cls.FEATURE_SELECTION_METHOD}_fs_[TIMESTAMP]')
+        mode_suffix = "_binary" if cls.CLASSIFICATION_MODE == 'binary' else "_multi"
+        
+        # 데이터셋 타입에 따라 하위 디렉토리 결정
+        dataset_type = cls._get_dataset_type()
+        
+        return os.path.join(
+            cls.BASE_OUTPUT_DIR,
+            dataset_type,
+            f'{cls.FEATURE_SELECTION_METHOD}_fs_[TIMESTAMP]{mode_suffix}'
+        )
 
     @classmethod
     def get_available_feature_methods(cls):
@@ -134,9 +166,15 @@ class Config:
         return ['LR', 'SVM', 'RF', 'GB', 'KNN', 'NB']
     
     @classmethod
+    def get_available_classification_modes(cls):
+        """사용 가능한 분류 모드 목록 반환"""
+        return ['binary', 'multi']
+    
+    @classmethod
     def print_config_summary(cls):
         """현재 설정 요약 출력"""
         print("=== 현재 설정 요약 ===")
+        print(f"분류 모드: {cls.CLASSIFICATION_MODE}")
         print(f"특징 선택 방법: {cls.FEATURE_SELECTION_METHOD}")
         print(f"분류 모델: {cls.CLASSIFICATION_MODELS}")
         print(f"랜덤 시드: {cls.RANDOM_STATE}")

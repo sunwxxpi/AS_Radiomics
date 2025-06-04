@@ -88,7 +88,23 @@ class ResultPlotter:
     def _plot_confusion_matrix(self, model_name, conf_matrix):
         """혼동 행렬 플롯"""
         try:
-            target_names = self.label_encoder.classes_
+            # 원래 클래스 가져오기
+            original_class_names = self.label_encoder.classes_
+            
+            # 원하는 순서 정의
+            desired_order = ['normal', 'nonsevere', 'severe']
+            
+            # 원래 순서에 있는 클래스만 포함시키기 (모든 클래스가 항상 존재하지는 않을 수 있음)
+            target_names = [c for c in desired_order if c in original_class_names]
+            
+            # 만약 원하는 순서에 없는 클래스가 있다면 마지막에 추가
+            for c in original_class_names:
+                if c not in target_names:
+                    target_names.append(c)
+            
+            # 클래스 순서에 맞게 confusion matrix 재배열
+            idx_map = [list(original_class_names).index(c) for c in target_names]
+            conf_matrix = conf_matrix[idx_map, :][:, idx_map]
             
             # 정규화된 혼동 행렬
             conf_matrix_normalized = conf_matrix.astype('float') / conf_matrix.sum(axis=1)[:, np.newaxis]
