@@ -73,17 +73,28 @@ class ModelTrainer:
             
             # 예측
             y_pred = model.predict(X_val)
-            y_pred_proba = None
+            all_class_probas = None
             
             # 확률 예측 (가능한 경우)
             if hasattr(model, "predict_proba"):
-                y_pred_proba = self._get_positive_class_probabilities(model, X_val)
+                all_class_probas = model.predict_proba(X_val)
+                
+                # AUC 계산을 위해 severe 클래스 확률 추출
+                positive_class_label = 'severe'
+                if positive_class_label in self.label_encoder.classes_:
+                    positive_class_idx = list(self.label_encoder.classes_).index(positive_class_label)
+                    y_pred_proba = all_class_probas[:, positive_class_idx]
+                else:
+                    print(f"      경고: '{positive_class_label}' 클래스를 찾을 수 없음")
+                    y_pred_proba = all_class_probas[:, 0]
+            else:
+                y_pred_proba = None
             
             # 메트릭 계산
             metrics = self._calculate_metrics(y_val, y_pred, y_pred_proba)
             
             # 예측 결과 저장
-            self._save_predictions(model_name, X_val, y_val, y_pred, y_pred_proba)
+            self._save_predictions(model_name, X_val, y_val, y_pred, all_class_probas)
             
             # 결과 저장
             self.results[model_name] = metrics
@@ -94,20 +105,6 @@ class ModelTrainer:
         except Exception as e:
             print(f"    '{model_name}' 평가 오류: {e}")
             self.results[model_name] = self._empty_result()
-    
-    def _get_positive_class_probabilities(self, model, X_val):
-        """양성 클래스에 대한 확률 추출"""
-        try:
-            positive_class_label = 'severe'
-            if positive_class_label in self.label_encoder.classes_:
-                positive_class_idx = list(self.label_encoder.classes_).index(positive_class_label)
-                return model.predict_proba(X_val)[:, positive_class_idx]
-            else:
-                print(f"      경고: '{positive_class_label}' 클래스를 찾을 수 없음")
-                return model.predict_proba(X_val)[:, 0]
-        except Exception as e:
-            print(f"      확률 추출 오류: {e}")
-            return None
     
     def _calculate_metrics(self, y_val, y_pred, y_pred_proba):
         """평가 메트릭 계산"""
@@ -146,16 +143,22 @@ class ModelTrainer:
             'Confusion Matrix': conf_matrix
         }
     
-    def _save_predictions(self, model_name, X_val, y_val, y_pred, y_pred_proba):
+    def _save_predictions(self, model_name, X_val, y_val, y_pred, all_class_probas=None):
         """예측 결과 저장"""
-        self.prediction_results[model_name] = {
+        prediction_dict = {
             'case_ids': list(X_val.index),
             'actual_labels': y_val.tolist(),
             'actual_labels_str': [self.label_encoder.classes_[label] for label in y_val],
             'predicted_labels': y_pred.tolist(),
             'predicted_labels_str': [self.label_encoder.classes_[label] for label in y_pred],
-            'predicted_probas': y_pred_proba.tolist() if y_pred_proba is not None else None
         }
+        
+        # 모든 클래스 확률 저장
+        if all_class_probas is not None:
+            for i, class_name in enumerate(self.label_encoder.classes_):
+                prediction_dict[f'proba_{class_name}'] = all_class_probas[:, i].tolist()
+        
+        self.prediction_results[model_name] = prediction_dict
     
     def _print_evaluation_results(self, model_name, metrics):
         """평가 결과 출력"""

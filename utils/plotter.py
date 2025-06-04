@@ -21,22 +21,29 @@ class ResultPlotter:
     
     def _plot_model_results(self, feature_selection_method, model_name, predictions, metrics):
         """단일 모델의 시각화 결과 생성"""
-        # ROC 곡선
-        if predictions['predicted_probas'] is not None:
-            self._plot_roc_curve(feature_selection_method, model_name, predictions, metrics['AUC'])
-            self._plot_pr_curve(feature_selection_method, model_name, predictions, metrics['AP'])
+        # severe 클래스 확률 확인
+        proba_severe = None
+        for key in predictions.keys():
+            if key == 'proba_severe':
+                proba_severe = predictions[key]
+                break
+        
+        # ROC 곡선과 PR 곡선
+        if proba_severe is not None:
+            self._plot_roc_curve(feature_selection_method, model_name, predictions, metrics['AUC'], proba_severe)
+            self._plot_pr_curve(feature_selection_method, model_name, predictions, metrics['AP'], proba_severe)
         
         # Confusion Matrix
         if 'Confusion Matrix' in metrics and metrics['Confusion Matrix'].size > 0:
             self._plot_confusion_matrix(feature_selection_method, model_name, metrics['Confusion Matrix'])
     
-    def _plot_roc_curve(self, feature_selection_method, model_name, predictions, auc_score):
+    def _plot_roc_curve(self, feature_selection_method, model_name, predictions, auc_score, proba_severe):
         """ROC 곡선 플롯"""
         if len(np.unique(predictions['actual_labels'])) <= 1:
             return
         
         try:
-            fpr, tpr, _ = roc_curve(predictions['actual_labels'], predictions['predicted_probas'])
+            fpr, tpr, _ = roc_curve(predictions['actual_labels'], proba_severe)
             
             plt.figure(figsize=(8, 6))
             plt.plot(fpr, tpr, color='darkorange', lw=2, 
@@ -57,14 +64,14 @@ class ResultPlotter:
         except Exception as e:
             print(f"      ROC 곡선 생성 오류 ({model_name}): {e}")
     
-    def _plot_pr_curve(self, feature_selection_method, model_name, predictions, ap_score):
+    def _plot_pr_curve(self, feature_selection_method, model_name, predictions, ap_score, proba_severe):
         """PR 곡선 플롯"""
         if len(np.unique(predictions['actual_labels'])) <= 1:
             return
         
         try:
             precision, recall, _ = precision_recall_curve(
-                predictions['actual_labels'], predictions['predicted_probas']
+                predictions['actual_labels'], proba_severe
             )
             
             plt.figure(figsize=(8, 6))

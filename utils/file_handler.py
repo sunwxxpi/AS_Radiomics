@@ -57,10 +57,10 @@ class FileHandler:
             # 각 모델의 예측 결과 추가
             result_df[f'{model_name}_predicted'] = prediction_dict['predicted_labels_str']
             
-            # 확률 값 추가
-            if ('predicted_probas' in prediction_dict and 
-                prediction_dict['predicted_probas'] is not None):
-                result_df[f'{model_name}_severe_probability'] = prediction_dict['predicted_probas']
+            # 모든 클래스에 대한 확률 추가
+            for class_label in [key.replace('proba_', '') for key in prediction_dict.keys() if key.startswith('proba_')]:
+                if f'proba_{class_label}' in prediction_dict:
+                    result_df[f'{model_name}_{class_label}_probability'] = prediction_dict[f'proba_{class_label}']
         
         if not result_df.empty:
             file_path = os.path.join(self.output_dir, filename)
