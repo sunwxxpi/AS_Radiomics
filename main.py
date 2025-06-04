@@ -88,7 +88,7 @@ def run_pipeline(mode):
         # 6. 시각화
         print("\n--- 5. 결과 시각화 ---")
         plotter = ResultPlotter(output_dir, preprocessor.label_encoder)
-        plotter.plot_all_results(trainer.trained_models, prediction_results, results)
+        plotter.plot_all_results(Config.FEATURE_SELECTION_METHOD, trainer.trained_models, prediction_results, results)
         
         # 7. 결과 저장
         print("\n--- 6. 결과 저장 ---")

@@ -11,26 +11,26 @@ class ResultPlotter:
         self.output_dir = output_dir
         self.label_encoder = label_encoder
     
-    def plot_all_results(self, trained_models, prediction_results, results):
+    def plot_all_results(self, feature_selection_method, trained_models, prediction_results, results):
         """모든 모델의 시각화 결과 생성"""
         print("  시각화 결과 생성 중...")
         
         for model_name in trained_models.keys():
             if model_name in prediction_results and model_name in results:
-                self._plot_model_results(model_name, prediction_results[model_name], results[model_name])
+                self._plot_model_results(feature_selection_method, model_name, prediction_results[model_name], results[model_name])
     
-    def _plot_model_results(self, model_name, predictions, metrics):
+    def _plot_model_results(self, feature_selection_method, model_name, predictions, metrics):
         """단일 모델의 시각화 결과 생성"""
         # ROC 곡선
         if predictions['predicted_probas'] is not None:
-            self._plot_roc_curve(model_name, predictions, metrics['AUC'])
-            self._plot_pr_curve(model_name, predictions, metrics['AP'])
+            self._plot_roc_curve(feature_selection_method, model_name, predictions, metrics['AUC'])
+            self._plot_pr_curve(feature_selection_method, model_name, predictions, metrics['AP'])
         
         # Confusion Matrix
         if 'Confusion Matrix' in metrics and metrics['Confusion Matrix'].size > 0:
-            self._plot_confusion_matrix(model_name, metrics['Confusion Matrix'])
+            self._plot_confusion_matrix(feature_selection_method, model_name, metrics['Confusion Matrix'])
     
-    def _plot_roc_curve(self, model_name, predictions, auc_score):
+    def _plot_roc_curve(self, feature_selection_method, model_name, predictions, auc_score):
         """ROC 곡선 플롯"""
         if len(np.unique(predictions['actual_labels'])) <= 1:
             return
@@ -46,7 +46,7 @@ class ResultPlotter:
             plt.ylim([0.0, 1.05])
             plt.xlabel('False Positive Rate', fontsize=14)
             plt.ylabel('True Positive Rate', fontsize=14)
-            plt.title(f'ROC Curve - {model_name}', fontsize=16)
+            plt.title(f'ROC Curve - {feature_selection_method}_{model_name}', fontsize=16)
             plt.legend(loc="lower right", fontsize=12)
             plt.grid(alpha=0.3)
             
@@ -57,7 +57,7 @@ class ResultPlotter:
         except Exception as e:
             print(f"      ROC 곡선 생성 오류 ({model_name}): {e}")
     
-    def _plot_pr_curve(self, model_name, predictions, ap_score):
+    def _plot_pr_curve(self, feature_selection_method, model_name, predictions, ap_score):
         """PR 곡선 플롯"""
         if len(np.unique(predictions['actual_labels'])) <= 1:
             return
@@ -74,7 +74,7 @@ class ResultPlotter:
             plt.ylabel('Precision', fontsize=14)
             plt.ylim([0.0, 1.05])
             plt.xlim([0.0, 1.0])
-            plt.title(f'Precision-Recall Curve - {model_name}', fontsize=16)
+            plt.title(f'Precision-Recall Curve - {feature_selection_method}_{model_name}', fontsize=16)
             plt.legend(loc="best", fontsize=12)
             plt.grid(alpha=0.3)
             
@@ -85,7 +85,7 @@ class ResultPlotter:
         except Exception as e:
             print(f"      PR 곡선 생성 오류 ({model_name}): {e}")
     
-    def _plot_confusion_matrix(self, model_name, conf_matrix):
+    def _plot_confusion_matrix(self, feature_selection_method, model_name, conf_matrix):
         """혼동 행렬 플롯"""
         try:
             # 원래 클래스 가져오기
@@ -111,7 +111,7 @@ class ResultPlotter:
             sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues',
                        xticklabels=target_names, yticklabels=target_names,
                        annot_kws={"size": 18})
-            plt.title(f'{model_name} - Validation Confusion Matrix (Raw Counts)', fontsize=16)
+            plt.title(f'Confusion Matrix (Raw Counts) - {feature_selection_method}_{model_name}', fontsize=16)
             plt.xlabel('Predicted Label', fontsize=14)
             plt.ylabel('True Label', fontsize=14)
             plt.tight_layout()
@@ -127,7 +127,7 @@ class ResultPlotter:
             sns.heatmap(conf_matrix_normalized, annot=True, fmt='.2f', cmap='Blues',
                        xticklabels=target_names, yticklabels=target_names,
                        annot_kws={"size": 18}, vmin=0.0, vmax=1.0)
-            plt.title(f'{model_name} - Validation Confusion Matrix (Normalized)', fontsize=16)
+            plt.title(f'Confusion Matrix (Normalized) - {feature_selection_method}_{model_name}', fontsize=16)
             plt.xlabel('Predicted Label', fontsize=14)
             plt.ylabel('True Label', fontsize=14)
             plt.tight_layout()
@@ -137,4 +137,4 @@ class ResultPlotter:
             plt.close()
             
         except Exception as e:
-            print(f"      혼동 행렬 생성 오류 ({model_name}): {e}")
+            print(f"      혼동 행렬 생성 오류 ({feature_selection_method}_{model_name}): {e}")
