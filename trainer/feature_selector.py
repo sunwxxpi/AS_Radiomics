@@ -1,9 +1,8 @@
 import numpy as np
 import pandas as pd
-from sklearn.feature_selection import SelectFromModel, RFE, SelectKBest, f_classif, mutual_info_classif, chi2
+from sklearn.feature_selection import SelectFromModel, RFE, SelectKBest, f_classif, mutual_info_classif
 from sklearn.linear_model import LassoCV
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import SVC
 
 class FeatureSelector:
     """다양한 특징 선택 방법을 제공하는 클래스"""

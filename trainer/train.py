@@ -1,9 +1,7 @@
 import numpy as np
-import pandas as pd
 from sklearn.metrics import (
     accuracy_score, roc_auc_score, classification_report,
-    confusion_matrix, roc_curve, precision_recall_curve,
-    average_precision_score
+    confusion_matrix, average_precision_score
 )
 from trainer.model_factory import ModelFactory
 

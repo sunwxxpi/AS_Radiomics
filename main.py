@@ -74,12 +74,12 @@ def run_pipeline(mode):
         
         # 4. 데이터 전처리
         print("\n--- 3. 데이터 전처리 ---")
-        preprocessor = DataPreprocessor(Config)  # Config 클래스 전달
+        preprocessor = DataPreprocessor(Config)
         processed_data = preprocessor.prepare_data(train_features_df, val_features_df)
         
         # 5. 모델 학습 및 평가
         print("\n--- 4. 모델 학습 및 평가 ---")
-        trainer = ModelTrainer(Config, preprocessor.label_encoder)  # Config 클래스 전달
+        trainer = ModelTrainer(Config, preprocessor.label_encoder)
         results, prediction_results = trainer.train_and_evaluate(
             processed_data['X_train'], processed_data['y_train'],
             processed_data['X_val'], processed_data['y_val']
@@ -116,7 +116,6 @@ def main():
     print("\n\n===== Multi-class 분류 모드로 파이프라인 실행 =====")
     run_pipeline('multi')
     
-    # binary 모드의 로거 복원 (multi 모드에서 변경되었을 수 있음)
     if binary_logger:
         sys.stdout = binary_logger.terminal
 

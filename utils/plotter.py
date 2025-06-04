@@ -106,6 +106,20 @@ class ResultPlotter:
             idx_map = [list(original_class_names).index(c) for c in target_names]
             conf_matrix = conf_matrix[idx_map, :][:, idx_map]
             
+            # 원본 혼동 행렬
+            plt.figure(figsize=(8, 6))
+            sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues',
+                       xticklabels=target_names, yticklabels=target_names,
+                       annot_kws={"size": 18})
+            plt.title(f'{model_name} - Validation Confusion Matrix (Raw Counts)', fontsize=16)
+            plt.xlabel('Predicted Label', fontsize=14)
+            plt.ylabel('True Label', fontsize=14)
+            plt.tight_layout()
+            
+            filename = os.path.join(self.output_dir, f'{model_name}_CM_raw.png')
+            plt.savefig(filename)
+            plt.close()
+            
             # 정규화된 혼동 행렬
             conf_matrix_normalized = conf_matrix.astype('float') / conf_matrix.sum(axis=1)[:, np.newaxis]
             
@@ -119,20 +133,6 @@ class ResultPlotter:
             plt.tight_layout()
             
             filename = os.path.join(self.output_dir, f'{model_name}_CM_normalized.png')
-            plt.savefig(filename)
-            plt.close()
-            
-            # 원본 혼동 행렬
-            plt.figure(figsize=(8, 6))
-            sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues',
-                       xticklabels=target_names, yticklabels=target_names,
-                       annot_kws={"size": 18})
-            plt.title(f'{model_name} - Validation Confusion Matrix (Raw Counts)', fontsize=16)
-            plt.xlabel('Predicted Label', fontsize=14)
-            plt.ylabel('True Label', fontsize=14)
-            plt.tight_layout()
-            
-            filename = os.path.join(self.output_dir, f'{model_name}_CM_raw.png')
             plt.savefig(filename)
             plt.close()
             
