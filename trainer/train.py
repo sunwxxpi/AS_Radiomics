@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.metrics import (
-    accuracy_score, roc_auc_score, classification_report,
-    confusion_matrix, average_precision_score
+    accuracy_score, f1_score, roc_auc_score, average_precision_score,
+    classification_report, confusion_matrix
 )
 from trainer.model_factory import ModelFactory
 
@@ -77,31 +77,17 @@ class ModelTrainer:
 
             # 확률 예측 (가능한 경우)
             if hasattr(model, "predict_proba"):
-                all_class_probas = model.predict_proba(X_val)
-                
-                # AUC 계산을 위해 severe 클래스 확률 추출
-                positive_class_label = 'severe'
-                if positive_class_label in self.label_encoder.classes_:
-                    positive_class_idx = list(self.label_encoder.classes_).index(positive_class_label)
-                    y_pred_proba = all_class_probas[:, positive_class_idx]
-                else:
-                    print(f"      경고: '{positive_class_label}' 클래스를 찾을 수 없음")
-                    y_pred_proba = all_class_probas[:, 0]
-            else:
-                y_pred_proba = None
+                all_class_probas = model.predict_proba(x_val)
             
             # 메트릭 계산
-            metrics = self._calculate_metrics(y_val, y_pred, y_pred_proba)
-            
+            metrics = self._calculate_metrics(y_val, y_pred, all_class_probas)
             # 예측 결과 저장
-            self._save_predictions(model_name, X_val, y_val, y_pred, all_class_probas)
-            
+            self._save_predictions(model_name, x_val, y_val, y_pred, all_class_probas)
             # 결과 저장
             self.results[model_name] = metrics
             
             # 결과 출력
             self._print_evaluation_results(model_name, metrics)
-            
         except Exception as e:
             print(f"    '{model_name}' 평가 오류: {e}")
             self.results[model_name] = self._empty_result()
@@ -109,15 +95,40 @@ class ModelTrainer:
     def _calculate_metrics(self, y_val, y_pred, y_pred_proba):
         """평가 메트릭 계산"""
         accuracy = accuracy_score(y_val, y_pred)
-        
-        # AUC와 AP는 확률이 있고 클래스가 2개 이상일 때만 계산
+
+        # F1-Score 계산
+        if len(np.unique(y_val)) <= 2:  # 이진 분류 또는 단일 클래스
+            f1 = f1_score(y_val, y_pred, average='binary', zero_division=0)
+        else:  # 다중 분류
+            f1 = f1_score(y_val, y_pred, average='macro', zero_division=0)
+
+        # AUC와 AP 초기화
         auc = float('nan')
         ap = float('nan')
-        
-        if y_pred_proba is not None and len(np.unique(y_val)) > 1:
+
+        # 클래스 수 확인
+        n_classes = len(np.unique(y_val))
+
+        # 모델이 확률을 제공하고, 클래스가 2개 이상일 때
+        if y_pred_proba is not None and n_classes > 1:
             try:
-                auc = roc_auc_score(y_val, y_pred_proba)
-                ap = average_precision_score(y_val, y_pred_proba)
+                # 이진 분류인 경우
+                if n_classes == 2:
+                    # 양성 클래스(1)의 확률을 사용
+                    auc = roc_auc_score(y_val, y_pred_proba[:, 1])
+                    ap = average_precision_score(y_val, y_pred_proba[:, 1])
+                # 다중 분류인 경우
+                else:
+                    # 다중 클래스 AUC 계산 (One-vs-Rest 방식)
+                    auc = roc_auc_score(y_val, y_pred_proba, multi_class='ovr', average='macro')
+
+                    # 다중 클래스 AP 계산 (Macro Average)
+                    ap_scores = []
+                    for i in range(n_classes):
+                        # 현재 클래스를 양성(1), 나머지를 음성(0)으로 변환
+                        y_binary = (y_val == i).astype(int)
+                        ap_scores.append(average_precision_score(y_binary, y_pred_proba[:, i]))
+                    ap = np.mean(ap_scores)
             except Exception as e:
                 print(f"      AUC/AP 계산 오류: {e}")
         
@@ -137,6 +148,7 @@ class ModelTrainer:
         
         return {
             'Accuracy': accuracy,
+            'F1': f1,
             'AUC': auc,
             'AP': ap,
             'Classification Report': class_report,
@@ -164,6 +176,7 @@ class ModelTrainer:
         """평가 결과 출력"""
         print(f"\n    --- '{model_name}' 검증 결과 ---")
         print(f"    Accuracy: {metrics['Accuracy']:.4f}")
+        print(f"    F1-Score: {metrics['F1']:.4f}")
         print(f"    AUC: {metrics['AUC']:.4f}")
         print(f"    Average Precision: {metrics['AP']:.4f}")
     
@@ -171,6 +184,7 @@ class ModelTrainer:
         """빈 결과 딕셔너리 반환"""
         return {
             'Accuracy': float('nan'),
+            'F1': float('nan'),
             'AUC': float('nan'),
             'AP': float('nan'),
             'Classification Report': {},

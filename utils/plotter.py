@@ -2,7 +2,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import roc_curve, precision_recall_curve
+from sklearn.metrics import auc, roc_curve, precision_recall_curve
 
 class ResultPlotter:
     """결과 시각화를 담당하는 클래스"""
@@ -21,17 +21,33 @@ class ResultPlotter:
     
     def _plot_model_results(self, feature_selection_method, model_name, predictions, metrics):
         """단일 모델의 시각화 결과 생성"""
-        # severe 클래스 확률 확인
-        proba_severe = None
+        # 클래스 확률 확인
+        class_probas = {}
         for key in predictions.keys():
-            if key == 'proba_severe':
-                proba_severe = predictions[key]
-                break
+            if key.startswith('proba_'):
+                class_name = key.replace('proba_', '')
+                class_probas[class_name] = predictions[key]
+        
+        # 클래스 개수 확인
+        n_classes = len(np.unique(predictions['actual_labels']))
         
         # ROC 곡선과 PR 곡선
-        if proba_severe is not None:
-            self._plot_roc_curve(feature_selection_method, model_name, predictions, metrics['AUC'], proba_severe)
-            self._plot_pr_curve(feature_selection_method, model_name, predictions, metrics['AP'], proba_severe)
+        if class_probas and n_classes > 0:
+            # 이진 분류인 경우
+            if n_classes == 2:
+                severe_class = None
+                for class_name in class_probas.keys():
+                    if class_name == 'severe' or class_name == '1':
+                        severe_class = class_name
+                        break
+                
+                if severe_class and f'proba_{severe_class}' in predictions:
+                    self._plot_roc_curve(feature_selection_method, model_name, predictions, metrics['AUC'], predictions[f'proba_{severe_class}'])
+                    self._plot_pr_curve(feature_selection_method, model_name, predictions, metrics['AP'], predictions[f'proba_{severe_class}'])
+            # 다중 클래스인 경우
+            else:
+                self._plot_multiclass_roc_curve(feature_selection_method, model_name, predictions, metrics['AUC'], class_probas)
+                self._plot_multiclass_pr_curve(feature_selection_method, model_name, predictions, metrics['AP'], class_probas)
         
         # Confusion Matrix
         if 'Confusion Matrix' in metrics and metrics['Confusion Matrix'].size > 0:
@@ -89,6 +105,81 @@ class ResultPlotter:
             
         except Exception as e:
             print(f"      PR 곡선 생성 오류 ({model_name}): {e}")
+    
+    def _plot_multiclass_roc_curve(self, feature_selection_method, model_name, predictions, auc_score, class_probas):
+        """다중 클래스 ROC 곡선 플롯"""
+        if len(np.unique(predictions['actual_labels'])) <= 1:
+            return
+        
+        try:
+            plt.figure(figsize=(10, 8))
+            
+            # 각 클래스별로 ROC 커브 그리기
+            for i, class_name in enumerate(class_probas.keys()):
+                # 해당 클래스에 대한 이진 레이블 생성 (one-vs-rest)
+                y_true_bin = np.array(predictions['actual_labels']) == i
+                
+                if np.sum(y_true_bin) == 0:  # 해당 클래스가 없으면 건너뜀
+                    continue
+                    
+                fpr, tpr, _ = roc_curve(y_true_bin, class_probas[class_name])
+                roc_auc = auc(fpr, tpr)
+                
+                plt.plot(fpr, tpr, lw=2, label=f'{class_name} (AUC = {roc_auc:.4f})')
+            
+            # 기준선 및 설정
+            plt.plot([0, 1], [0, 1], 'k--', lw=2)
+            plt.xlim([0.0, 1.0])
+            plt.ylim([0.0, 1.05])
+            plt.xlabel('False Positive Rate', fontsize=14)
+            plt.ylabel('True Positive Rate', fontsize=14)
+            plt.title(f'Multi-class ROC Curve - {feature_selection_method}_{model_name}\nMacro-average AUC = {auc_score:.4f}', fontsize=16)
+            plt.legend(loc="lower right", fontsize=12)
+            plt.grid(alpha=0.3)
+            
+            filename = os.path.join(self.output_dir, f'{model_name}_multiclass_ROC_curve.png')
+            plt.savefig(filename)
+            plt.close()
+            
+        except Exception as e:
+            print(f"      다중 클래스 ROC 곡선 생성 오류 ({model_name}): {e}")
+    
+    def _plot_multiclass_pr_curve(self, feature_selection_method, model_name, predictions, ap_score, class_probas):
+        """다중 클래스 PR 곡선 플롯"""
+        if len(np.unique(predictions['actual_labels'])) <= 1:
+            return
+        
+        try:
+            plt.figure(figsize=(10, 8))
+            
+            # 각 클래스별로 PR 커브 그리기
+            for i, class_name in enumerate(class_probas.keys()):
+                # 해당 클래스에 대한 이진 레이블 생성 (one-vs-rest)
+                y_true_bin = np.array(predictions['actual_labels']) == i
+                
+                if np.sum(y_true_bin) == 0:  # 해당 클래스가 없으면 건너뜀
+                    continue
+                    
+                precision, recall, _ = precision_recall_curve(y_true_bin, class_probas[class_name])
+                pr_auc = auc(recall, precision)
+                
+                plt.plot(recall, precision, lw=2, label=f'{class_name} (AP = {pr_auc:.4f})')
+            
+            # 설정
+            plt.xlabel('Recall (Sensitivity)', fontsize=14)
+            plt.ylabel('Precision', fontsize=14)
+            plt.ylim([0.0, 1.05])
+            plt.xlim([0.0, 1.0])
+            plt.title(f'Multi-class Precision-Recall Curve - {feature_selection_method}_{model_name}\nMacro-average AP = {ap_score:.4f}', fontsize=16)
+            plt.legend(loc="best", fontsize=12)
+            plt.grid(alpha=0.3)
+            
+            filename = os.path.join(self.output_dir, f'{model_name}_multiclass_PR_curve.png')
+            plt.savefig(filename)
+            plt.close()
+            
+        except Exception as e:
+            print(f"      다중 클래스 PR 곡선 생성 오류 ({model_name}): {e}")
     
     def _plot_confusion_matrix(self, feature_selection_method, model_name, conf_matrix):
         """혼동 행렬 플롯"""

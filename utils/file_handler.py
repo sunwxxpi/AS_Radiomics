@@ -81,6 +81,7 @@ class FileHandler:
         results_summary_df = pd.DataFrame({
             model_name: {
                 'Accuracy': res.get('Accuracy', float('nan')),
+                'F1': res.get('F1', float('nan')),
                 'AUC': res.get('AUC', float('nan')),
                 'AP': res.get('AP', float('nan'))
             } for model_name, res in results.items() if isinstance(res, dict)
