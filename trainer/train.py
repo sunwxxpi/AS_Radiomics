@@ -17,12 +17,12 @@ class ModelTrainer:
         self.results = {}
         self.prediction_results = {}
     
-    def train_and_evaluate(self, X_train, y_train, X_val=None, y_val=None):
+    def train_and_evaluate(self, x_train, y_train, x_val=None, y_val=None):
         """모든 모델 학습 및 평가"""
         print("--- 모델 학습 시작 ---")
         print(f"  사용할 모델: {list(self.models.keys())}")
         
-        if X_train.empty or len(y_train) == 0:
+        if x_train.empty or len(y_train) == 0:
             print("  오류: 학습 데이터가 비어있습니다.")
             return self.results, self.prediction_results
         
@@ -34,13 +34,13 @@ class ModelTrainer:
             print(f"\n  '{model_name}' 모델 처리 중...")
             
             # 모델 학습
-            success = self._train_model(model_name, model, X_train, y_train)
+            success = self._train_model(model_name, model, x_train, y_train)
             if not success:
                 continue
             
             # 모델 평가 (검증 데이터가 있는 경우)
-            if X_val is not None and not X_val.empty and len(y_val) > 0:
-                self._evaluate_model(model_name, model, X_val, y_val)
+            if x_val is not None and not x_val.empty and len(y_val) > 0:
+                self._evaluate_model(model_name, model, x_val, y_val)
             else:
                 print(f"    '{model_name}' 검증 데이터가 없어 평가를 건너뜁니다.")
                 self.results[model_name] = self._empty_result()
@@ -48,15 +48,15 @@ class ModelTrainer:
         print("--- 모델 학습 완료 ---\n")
         return self.results, self.prediction_results
     
-    def _train_model(self, model_name, model, X_train, y_train):
+    def _train_model(self, model_name, model, x_train, y_train):
         """단일 모델 학습"""
         try:
-            if X_train.shape[0] < 2 or len(np.unique(y_train)) < 2:
+            if x_train.shape[0] < 2 or len(np.unique(y_train)) < 2:
                 print(f"    '{model_name}' 학습 건너뛰기 (데이터 부족)")
                 self.results[model_name] = self._empty_result()
                 return False
             
-            model.fit(X_train, y_train)
+            model.fit(x_train, y_train)
             self.trained_models[model_name] = model
             print(f"    '{model_name}' 학습 완료")
             return True
@@ -66,15 +66,15 @@ class ModelTrainer:
             self.results[model_name] = self._empty_result()
             return False
     
-    def _evaluate_model(self, model_name, model, X_val, y_val):
+    def _evaluate_model(self, model_name, model, x_val, y_val):
         """단일 모델 평가"""
         try:
             print(f"    '{model_name}' 평가 시작...")
             
             # 예측
-            y_pred = model.predict(X_val)
+            y_pred = model.predict(x_val)
             all_class_probas = None
-            
+
             # 확률 예측 (가능한 경우)
             if hasattr(model, "predict_proba"):
                 all_class_probas = model.predict_proba(X_val)
@@ -143,10 +143,10 @@ class ModelTrainer:
             'Confusion Matrix': conf_matrix
         }
     
-    def _save_predictions(self, model_name, X_val, y_val, y_pred, all_class_probas=None):
+    def _save_predictions(self, model_name, x_val, y_val, y_pred, all_class_probas=None):
         """예측 결과 저장"""
         prediction_dict = {
-            'case_ids': list(X_val.index),
+            'case_ids': list(x_val.index),
             'actual_labels': y_val.tolist(),
             'actual_labels_str': [self.label_encoder.classes_[label] for label in y_val],
             'predicted_labels': y_pred.tolist(),

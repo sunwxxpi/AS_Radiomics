@@ -12,49 +12,49 @@ class FeatureSelector:
         self.method = config.FEATURE_SELECTION_METHOD
         self.selector = None
         
-    def select_features(self, X_train, y_train, X_val=None):
+    def select_features(self, x_train, y_train, x_val=None):
         """특징 선택 메인 함수"""
         print(f"--- 특징 선택 시작 (방법: {self.method}) ---")
         
-        if X_train.empty or len(y_train) == 0:
+        if x_train.empty or len(y_train) == 0:
             print("  경고: 데이터가 비어있어 특징 선택을 건너뜁니다.")
-            return X_train, X_val if X_val is not None else pd.DataFrame()
+            return x_train, x_val if x_val is not None else pd.DataFrame()
         
         if self.method == 'none':
             print("  특징 선택을 건너뜁니다.")
-            return X_train, X_val if X_val is not None else pd.DataFrame()
+            return x_train, x_val if x_val is not None else pd.DataFrame()
         
         # 데이터 유효성 검사
-        if not self._validate_data(X_train, y_train):
-            return X_train, X_val if X_val is not None else pd.DataFrame()
+        if not self._validate_data(x_train, y_train):
+            return x_train, x_val if x_val is not None else pd.DataFrame()
         
         try:
             # 특징 선택 방법에 따라 선택기 생성
-            self.selector = self._create_selector(X_train, y_train)
+            self.selector = self._create_selector(x_train, y_train)
             
             if self.selector is None:
                 print("  특징 선택기 생성 실패. 모든 특징을 사용합니다.")
-                return X_train, X_val if X_val is not None else pd.DataFrame()
+                return x_train, x_val if x_val is not None else pd.DataFrame()
             
             # 특징 선택 수행
-            return self._apply_selection(X_train, X_val, y_train)
+            return self._apply_selection(x_train, x_val, y_train)
             
         except Exception as e:
             print(f"  특징 선택 오류: {e}")
             print("  모든 특징을 사용합니다.")
-            return X_train, X_val if X_val is not None else pd.DataFrame()
+            return x_train, x_val if x_val is not None else pd.DataFrame()
     
-    def _validate_data(self, X_train, y_train):
+    def _validate_data(self, x_train, y_train):
         """데이터 유효성 검사"""
         min_class_count = np.min(np.bincount(y_train)) if len(np.unique(y_train)) > 1 else 0
         cv_folds = min(self.config.CV_FOLDS, max(2, min_class_count))
         
-        if min_class_count < 2 or X_train.shape[0] < cv_folds:
+        if min_class_count < 2 or x_train.shape[0] < cv_folds:
             print("  경고: 샘플 수 부족으로 특징 선택을 건너뜁니다.")
             return False
         return True
     
-    def _create_selector(self, X_train, y_train):
+    def _create_selector(self, x_train, y_train):
         """특징 선택 방법에 따른 선택기 생성"""
         min_class_count = np.min(np.bincount(y_train))
         cv_folds = min(self.config.CV_FOLDS, max(2, min_class_count))
@@ -62,11 +62,11 @@ class FeatureSelector:
         if self.method == 'lasso':
             return self._create_lasso_selector(cv_folds)
         elif self.method == 'rfe':
-            return self._create_rfe_selector(X_train.shape[1])
+            return self._create_rfe_selector(x_train.shape[1])
         elif self.method == 'univariate':
-            return self._create_univariate_selector(X_train.shape[1])
+            return self._create_univariate_selector(x_train.shape[1])
         elif self.method == 'mutual_info':
-            return self._create_mutual_info_selector(X_train.shape[1])
+            return self._create_mutual_info_selector(x_train.shape[1])
         elif self.method == 'random_forest':
             return self._create_rf_selector()
         else:
@@ -167,47 +167,47 @@ class FeatureSelector:
             threshold=self.config.RF_FEATURE_THRESHOLD
         )
     
-    def _apply_selection(self, X_train, X_val, y_train):
+    def _apply_selection(self, x_train, x_val, y_train):
         """특징 선택 적용"""
         # 선택기 학습
-        self.selector.fit(X_train, y_train)
+        self.selector.fit(x_train, y_train)
         
         # 선택된 특징 확인
         if hasattr(self.selector, 'get_support'):
             selected_features = self.selector.get_support(indices=True)
-            selected_feature_names = X_train.columns[selected_features]
+            selected_feature_names = x_train.columns[selected_features]
         else:
             # RFE의 경우
-            selected_feature_names = X_train.columns[self.selector.support_]
+            selected_feature_names = x_train.columns[self.selector.support_]
         
         if len(selected_feature_names) == 0:
             print("  경고: 선택된 특징이 없어 모든 특징을 사용합니다.")
-            return X_train, X_val if X_val is not None else pd.DataFrame()
+            return x_train, x_val if x_val is not None else pd.DataFrame()
         
         # 특징 변환
-        X_train_selected = pd.DataFrame(
-            self.selector.transform(X_train),
+        x_train_selected = pd.DataFrame(
+            self.selector.transform(x_train),
             columns=selected_feature_names,
-            index=X_train.index
+            index=x_train.index
         )
         
-        X_val_selected = pd.DataFrame()
-        if X_val is not None and not X_val.empty:
-            X_val_selected = pd.DataFrame(
-                self.selector.transform(X_val),
+        x_val_selected = pd.DataFrame()
+        if x_val is not None and not x_val.empty:
+            x_val_selected = pd.DataFrame(
+                self.selector.transform(x_val),
                 columns=selected_feature_names,
-                index=X_val.index
+                index=x_val.index
             )
         
-        print(f"  특징 선택 완료: {X_train.shape[1]} → {len(selected_feature_names)}")
+        print(f"  특징 선택 완료: {x_train.shape[1]} → {len(selected_feature_names)}")
         print(f"  선택된 특징 예시: {list(selected_feature_names[:5])}")
         
         # 선택 방법별 추가 정보 출력
-        self._print_selection_info(X_train, selected_feature_names)
+        self._print_selection_info(x_train, selected_feature_names)
         
-        return X_train_selected, X_val_selected
+        return x_train_selected, x_val_selected
     
-    def _print_selection_info(self, X_train, selected_feature_names):
+    def _print_selection_info(self):
         """선택 방법별 추가 정보 출력"""
         if self.method == 'lasso' and hasattr(self.selector.estimator_, 'alpha_'):
             print(f"    최적 alpha: {self.selector.estimator_.alpha_:.6f}")

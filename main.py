@@ -81,8 +81,8 @@ def run_pipeline(mode):
         print("\n--- 4. 모델 학습 및 평가 ---")
         trainer = ModelTrainer(Config, preprocessor.label_encoder)
         results, prediction_results = trainer.train_and_evaluate(
-            processed_data['X_train'], processed_data['y_train'],
-            processed_data['X_val'], processed_data['y_val']
+            processed_data['x_train'], processed_data['y_train'],
+            processed_data['x_val'], processed_data['y_val']
         )
         
         # 6. 시각화

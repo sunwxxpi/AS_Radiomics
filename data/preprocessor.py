@@ -19,30 +19,30 @@ class DataPreprocessor:
         print("--- 데이터 전처리 시작 ---")
         
         # 1. 특징과 레이블 분리
-        X_train, y_train = self._split_features_labels(train_df)
-        X_val, y_val = self._split_features_labels(val_df) if val_df is not None and not val_df.empty else (pd.DataFrame(), pd.Series())
+        x_train, y_train = self._split_features_labels(train_df)
+        x_val, y_val = self._split_features_labels(val_df) if val_df is not None and not val_df.empty else (pd.DataFrame(), pd.Series())
         
         # 2. 레이블 인코딩
         y_train_encoded = self._encode_labels(y_train)
         y_val_encoded = self._encode_labels(y_val, fit=False) if not y_val.empty else np.array([])
         
         # 3. 결측값 처리
-        X_train_imputed = self._handle_missing_values(X_train)
-        X_val_imputed = self._handle_missing_values(X_val, fit=False) if not X_val.empty else pd.DataFrame()
+        x_train_imputed = self._handle_missing_values(x_train)
+        x_val_imputed = self._handle_missing_values(x_val, fit=False) if not x_val.empty else pd.DataFrame()
         
         # 4. 특징 스케일링
-        X_train_scaled = self._scale_features(X_train_imputed)
-        X_val_scaled = self._scale_features(X_val_imputed, fit=False) if not X_val_imputed.empty else pd.DataFrame()
+        x_train_scaled = self._scale_features(x_train_imputed)
+        x_val_scaled = self._scale_features(x_val_imputed, fit=False) if not x_val_imputed.empty else pd.DataFrame()
         
         # 5. 특징 선택
-        X_train_selected, X_val_selected = self.feature_selector.select_features(X_train_scaled, y_train_encoded, X_val_scaled)
+        x_train_selected, x_val_selected = self.feature_selector.select_features(x_train_scaled, y_train_encoded, x_val_scaled)
         
         print("--- 데이터 전처리 완료 ---\n")
         
         return {
-            'X_train': X_train_selected,
+            'x_train': x_train_selected,
             'y_train': y_train_encoded,
-            'X_val': X_val_selected,
+            'x_val': x_val_selected,
             'y_val': y_val_encoded
         }
     
@@ -88,13 +88,13 @@ class DataPreprocessor:
         print(f"  결측값 처리 {'(fit)' if fit else '(transform)'}...")
         
         if fit:
-            X_imputed = pd.DataFrame(
+            x_imputed = pd.DataFrame(
                 self.imputer.fit_transform(X),
                 columns=X.columns,
                 index=X.index
             )
         else:
-            X_imputed = pd.DataFrame(
+            x_imputed = pd.DataFrame(
                 self.imputer.transform(X),
                 columns=X.columns,
                 index=X.index
@@ -104,7 +104,7 @@ class DataPreprocessor:
         if missing_count > 0:
             print(f"    {missing_count}개 결측값을 평균으로 대체")
         
-        return X_imputed
+        return x_imputed
     
     def _scale_features(self, X, fit=True):
         """특징 스케일링"""
@@ -114,16 +114,16 @@ class DataPreprocessor:
         print(f"  특징 스케일링 {'(fit)' if fit else '(transform)'}...")
         
         if fit:
-            X_scaled = pd.DataFrame(
+            x_scaled = pd.DataFrame(
                 self.scaler.fit_transform(X),
                 columns=X.columns,
                 index=X.index
             )
         else:
-            X_scaled = pd.DataFrame(
+            x_scaled = pd.DataFrame(
                 self.scaler.transform(X),
                 columns=X.columns,
                 index=X.index
             )
         
-        return X_scaled
+        return x_scaled
