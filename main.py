@@ -34,7 +34,15 @@ def run_pipeline(mode):
         
         # 2. 특징 추출
         print("\n--- 2. Radiomics 특징 추출 ---")
-        extractor = RadiomicsExtractor()
+        if Config.ENABLE_DILATION:
+            print(f"  Dilation 활성화: {Config.DILATION_ITERATIONS}회 팽창 적용")
+        else:
+            print("  원본 마스크 사용 (Dilation 비활성화)")
+            
+        extractor = RadiomicsExtractor(
+            enable_dilation=Config.ENABLE_DILATION,
+            dilation_iterations=Config.DILATION_ITERATIONS
+        )
         
         train_features_df = extractor.extract_features_for_set(
             Config.IMAGE_TR_DIR, Config.LABEL_TR_DIR, "Train", patient_info_map, mode

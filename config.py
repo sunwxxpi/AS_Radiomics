@@ -5,8 +5,8 @@ class Config:
     """프로젝트 설정을 관리하는 클래스"""
     
     # 경로 설정
-    BASE_DIR = '/home/psw/AVS-Diagnosis/Dataset002_KMU_Chest_AVC'
-    # BASE_DIR = '/home/psw/AVS-Diagnosis/Dataset003_KMU_Cardiac_AVC'
+    # BASE_DIR = '/home/psw/AVS-Diagnosis/Dataset002_KMU_Chest_AVC'
+    BASE_DIR = '/home/psw/AVS-Diagnosis/Dataset003_KMU_Cardiac_AVC'
     LABEL_FILE = './data/AS_CRF_radiomics.csv'
     BASE_OUTPUT_DIR = './radiomics_analysis_results'
     
@@ -18,6 +18,10 @@ class Config:
     # 분류 모드 설정 (binary 또는 multi)
     CLASSIFICATION_MODE = 'binary'  # 기본값은 binary 분류
     
+    # Dilation 설정
+    ENABLE_DILATION = True   # Dilation 사용 여부
+    DILATION_ITERATIONS = 2  # Dilation 반복 횟수
+
     # 모델 하이퍼파라미터
     RANDOM_STATE = 42
     MAX_ITER = 2000
@@ -126,9 +130,14 @@ class Config:
     
     @classmethod
     def ensure_output_dir(cls):
-        """특징 선택 방법과 실행 시간, 분류 모드에 따른 출력 디렉토리 생성"""
+        """특징 선택 방법과 실행 시간, 분류 모드, dilation 설정에 따른 출력 디렉토리 생성"""
         timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         mode_suffix = "_binary" if cls.CLASSIFICATION_MODE == 'binary' else "_multi"
+        
+        # Dilation 정보 추가
+        dilation_suffix = ""
+        if cls.ENABLE_DILATION:
+            dilation_suffix = f"_dil{cls.DILATION_ITERATIONS}"
         
         # 데이터셋 타입에 따라 하위 디렉토리 결정
         dataset_type = cls._get_dataset_type()
@@ -136,7 +145,7 @@ class Config:
         output_dir = os.path.join(
             cls.BASE_OUTPUT_DIR,
             dataset_type,
-            f'{cls.FEATURE_SELECTION_METHOD}_fs_{timestamp}{mode_suffix}'
+            f'{cls.FEATURE_SELECTION_METHOD}_fs_{timestamp}{mode_suffix}{dilation_suffix}'
         )
         os.makedirs(output_dir, exist_ok=True)
         return output_dir
@@ -177,6 +186,9 @@ class Config:
         print(f"분류 모드: {cls.CLASSIFICATION_MODE}")
         print(f"특징 선택 방법: {cls.FEATURE_SELECTION_METHOD}")
         print(f"분류 모델: {cls.CLASSIFICATION_MODELS}")
+        print(f"Dilation 사용: {cls.ENABLE_DILATION}")
+        if cls.ENABLE_DILATION:
+            print(f"Dilation 반복 횟수: {cls.DILATION_ITERATIONS}")
         print(f"랜덤 시드: {cls.RANDOM_STATE}")
         print(f"CV 폴드 수: {cls.CV_FOLDS}")
         print(f"출력 디렉토리: {cls.get_output_dir()}")
