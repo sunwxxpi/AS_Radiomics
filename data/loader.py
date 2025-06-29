@@ -72,7 +72,7 @@ class DataLoader:
         # 맵 생성
         binary_map = binary_df.set_index('1차년도연구번호')['AV_binaryclassification'].to_dict()
         print(f"  이진 분류 맵 생성 완료 (총 {len(binary_map)} 개 항목)")
-        print(f"  고유 AV_binaryclassification 값: {sorted(binary_df['AV_binaryclassification'].unique())}")
+        print(f"  2-Class AS-Severity 값: {sorted(binary_df['AV_binaryclassification'].unique())}")
         
         return binary_map
     
@@ -105,8 +105,11 @@ class DataLoader:
         multi_map = multi_df.set_index('1차년도연구번호')['AS_grade_3class'].to_dict()
         
         print(f"  다중 분류 맵 생성 완료 (총 {len(multi_map)} 개 항목)")
-        print(f"  3-클래스 AS_grade 값: {sorted(multi_df['AS_grade_3class'].unique())}")
-        print(f"  3-클래스 분포: {multi_df['AS_grade_3class'].value_counts()}")
+        
+        # 원하는 순서로 클래스 정보 출력
+        class_order = ['normal', 'nonsevere', 'severe']
+        available_classes = [cls for cls in class_order if cls in multi_df['AS_grade_3class'].unique()]
+        print(f"  3-Class AS-Severity 값: {available_classes}")
         
         return multi_map
     

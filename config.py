@@ -5,8 +5,8 @@ class Config:
     """프로젝트 설정을 관리하는 클래스"""
     
     # 경로 설정
+    BASE_DIR = '/home/psw/AVS-Diagnosis/Dataset001_KMU_Cardiac_AVC'
     # BASE_DIR = '/home/psw/AVS-Diagnosis/Dataset002_KMU_Chest_AVC'
-    BASE_DIR = '/home/psw/AVS-Diagnosis/Dataset003_KMU_Cardiac_AVC'
     LABEL_FILE = './data/AS_CRF_radiomics.csv'
     BASE_OUTPUT_DIR = './radiomics_analysis_results'
     
@@ -19,8 +19,8 @@ class Config:
     CLASSIFICATION_MODE = 'binary'  # 기본값은 binary 분류
     
     # Dilation 설정
-    ENABLE_DILATION = True   # Dilation 사용 여부
-    DILATION_ITERATIONS = 2  # Dilation 반복 횟수
+    ENABLE_DILATION = False   # Dilation 사용 여부
+    DILATION_ITERATIONS = 1  # Dilation 반복 횟수
 
     # 모델 하이퍼파라미터
     RANDOM_STATE = 42
