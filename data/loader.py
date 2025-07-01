@@ -86,9 +86,9 @@ class DataLoader:
         # 3-클래스 변환 함수 정의
         def map_to_three_class(grade):
             grade = str(grade).strip().lower()
-            if grade in ['none']:
+            if grade in ['none', 'no']:
                 return 'normal'
-            elif grade in ['mild', 'moderate']:
+            elif grade in ['mild', 'moderate', 'pseudosevere']:
                 return 'nonsevere'
             elif grade in ['severe', 'very severe']:
                 return 'severe'
