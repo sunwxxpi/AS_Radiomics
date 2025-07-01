@@ -149,20 +149,6 @@ class Config:
         )
         os.makedirs(output_dir, exist_ok=True)
         return output_dir
-    
-    @classmethod
-    def get_output_dir(cls):
-        """현재 설정에 따른 출력 디렉토리 경로 반환"""
-        mode_suffix = "_binary" if cls.CLASSIFICATION_MODE == 'binary' else "_multi"
-        
-        # 데이터셋 타입에 따라 하위 디렉토리 결정
-        dataset_type = cls._get_dataset_type()
-        
-        return os.path.join(
-            cls.BASE_OUTPUT_DIR,
-            dataset_type,
-            f'{cls.FEATURE_SELECTION_METHOD}_fs_[TIMESTAMP]{mode_suffix}'
-        )
 
     @classmethod
     def get_available_feature_methods(cls):
@@ -191,5 +177,4 @@ class Config:
             print(f"Dilation 반복 횟수: {cls.DILATION_ITERATIONS}")
         print(f"랜덤 시드: {cls.RANDOM_STATE}")
         print(f"CV 폴드 수: {cls.CV_FOLDS}")
-        print(f"출력 디렉토리: {cls.get_output_dir()}")
         print("========================")

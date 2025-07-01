@@ -177,7 +177,7 @@ class ModelTrainer:
         print(f"\n    --- '{model_name}' 검증 결과 ---")
         print(f"    Accuracy: {metrics['Accuracy']:.4f}")
         print(f"    F1-Score: {metrics['F1']:.4f}")
-        print(f"    AUC: {metrics['AUC']:.4f}")
+        print(f"    Area Under Curve: {metrics['AUC']:.4f}")
         print(f"    Average Precision: {metrics['AP']:.4f}")
     
     def _empty_result(self):
