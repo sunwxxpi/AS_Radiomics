@@ -33,7 +33,7 @@ def run_pipeline(mode):
         data_loader = DataLoader(Config.LABEL_FILE)
         patient_info_map = data_loader.load_labels(mode)
         
-        # 2. 특징 추출
+        # 2. Radiomics 특징 추출
         print("\n--- 2. Radiomics 특징 추출 ---")
         if Config.ENABLE_DILATION:
             print(f"  Dilation 활성화: {Config.DILATION_ITERATIONS}회 팽창 적용")
@@ -87,6 +87,7 @@ def run_pipeline(mode):
             print(f"총 검증 케이스 수: {len(val_features_df)}")
         
         # 3. 특징 저장
+        print("\n--- 3. 특징 저장 ---")
         file_handler = FileHandler(output_dir, Config.FEATURE_SELECTION_METHOD)
         file_handler.save_features_to_csv(
             train_features_df, f'extracted_radiomics_features_train_{mode}.csv', "학습"
@@ -98,25 +99,25 @@ def run_pipeline(mode):
             )
         
         # 4. 데이터 전처리
-        print("\n--- 3. 데이터 전처리 ---")
+        print("\n--- 4. 데이터 전처리 ---")
         preprocessor = DataPreprocessor(Config)
         processed_data = preprocessor.prepare_data(train_features_df, val_features_df)
         
         # 5. 모델 학습 및 평가
-        print("\n--- 4. 모델 학습 및 평가 ---")
+        print("\n--- 5. 모델 학습 및 평가 ---")
         trainer = ModelTrainer(Config, preprocessor.label_encoder)
         results, prediction_results = trainer.train_and_evaluate(
             processed_data['x_train'], processed_data['y_train'],
             processed_data['x_val'], processed_data['y_val']
         )
         
-        # 6. 시각화
-        print("\n--- 5. 결과 시각화 ---")
+        # 6. 결과 시각화
+        print("\n--- 6. 결과 시각화 ---")
         plotter = ResultPlotter(output_dir, preprocessor.label_encoder)
         plotter.plot_all_results(Config.FEATURE_SELECTION_METHOD, trainer.trained_models, prediction_results, results)
         
         # 7. 결과 저장
-        print("\n--- 6. 결과 저장 ---")
+        print("\n--- 7. 결과 저장 ---")
         file_handler.save_prediction_results(
             prediction_results, f'test_cases_prediction_results_{mode}.csv'
         )
