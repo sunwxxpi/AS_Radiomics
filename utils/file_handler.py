@@ -29,6 +29,11 @@ class FileHandler:
         
         df_to_save = df_to_save[new_cols_order]
         
+        # case_id 기준으로 오름차순 정렬
+        if 'case_id' in df_to_save.columns:
+            df_to_save = df_to_save.sort_values(by='case_id')
+            print(f"  {df_name} 데이터를 case_id 기준으로 오름차순 정렬했습니다.")
+        
         file_path = os.path.join(self.output_dir, filename)
         df_to_save.to_csv(file_path, index=False)
         print(f"  {df_name} 특징 저장 완료.")
@@ -63,6 +68,11 @@ class FileHandler:
                     result_df[f'{model_name}_{class_label}_probability'] = prediction_dict[f'proba_{class_label}']
         
         if not result_df.empty:
+            # case_id 기준으로 오름차순 정렬
+            if 'case_id' in result_df.columns:
+                result_df = result_df.sort_values(by='case_id')
+                print(f"  예측 결과를 case_id 기준으로 오름차순 정렬했습니다.")
+                
             file_path = os.path.join(self.output_dir, filename)
             result_df.to_csv(file_path, index=False)
             print(f"  예측 결과 저장 완료: {result_df.shape[0]} 케이스, {result_df.shape[1]} 열")
@@ -95,3 +105,35 @@ class FileHandler:
         file_path = os.path.join(self.output_dir, filename)
         results_summary_df.to_csv(file_path)
         print(f"  모델 성능 요약 저장 완료: {file_path}")
+    
+    def save_split_data(self, train_df, test_df, base_filename, mode='binary'):
+        """분할된 train/test 데이터를 CSV로 저장"""
+        print(f"\n  분할된 데이터 저장: {base_filename}")
+        
+        if train_df.empty or test_df.empty:
+            print("  저장할 분할 데이터가 없습니다.")
+            return
+        
+        # case_id 기준으로 오름차순 정렬
+        if 'case_id' in train_df.index.names or 'case_id' in train_df.columns:
+            if 'case_id' in train_df.index.names:
+                train_df = train_df.reset_index()
+            train_df = train_df.sort_values(by='case_id')
+            print(f"  학습 데이터를 case_id 기준으로 오름차순 정렬했습니다.")
+            
+        if 'case_id' in test_df.index.names or 'case_id' in test_df.columns:
+            if 'case_id' in test_df.index.names:
+                test_df = test_df.reset_index()
+            test_df = test_df.sort_values(by='case_id')
+            print(f"  테스트 데이터를 case_id 기준으로 오름차순 정렬했습니다.")
+        
+        # 파일 경로
+        train_path = os.path.join(self.output_dir, f"{base_filename}_train.csv")
+        test_path = os.path.join(self.output_dir, f"{base_filename}_test.csv")
+        
+        # 저장
+        train_df.to_csv(train_path, index=False)
+        test_df.to_csv(test_path, index=False)
+        
+        print(f"  학습 데이터 저장 완료: {train_path} ({len(train_df)} 샘플)")
+        print(f"  테스트 데이터 저장 완료: {test_path} ({len(test_df)} 샘플)")

@@ -1,5 +1,5 @@
-import pandas as pd
 import sys
+import pandas as pd
 
 class DataLoader:
     """데이터 로딩 및 레이블 매핑을 담당하는 클래스"""

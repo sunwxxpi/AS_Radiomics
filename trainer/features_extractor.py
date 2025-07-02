@@ -80,6 +80,10 @@ class RadiomicsExtractor:
             print(f"    경고: 이미지 파일을 찾을 수 없습니다.")
             return pd.DataFrame()
         
+        # case_id 기준으로 파일 정렬
+        image_files.sort()
+        print(f"    파일 목록을 case_id 기준으로 오름차순 정렬했습니다.")
+        
         # 각 이미지 파일 처리
         for image_filename in image_files:
             result = self._process_single_case(

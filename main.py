@@ -8,6 +8,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from config import Config
 from data.loader import DataLoader
 from data.preprocessor import DataPreprocessor
+from utils.data_splitter import DataSplitter
 from utils.logger import setup_logging, close_logging
 from utils.plotter import ResultPlotter
 from utils.file_handler import FileHandler
@@ -45,79 +46,76 @@ def run_pipeline(mode):
             dilation_iterations=Config.DILATION_ITERATIONS
         )
         
+        # TR_DIR에서 특징 추출
+        print("\n  Training 디렉토리에서 특징 추출 중...")
         train_features_df = extractor.extract_features_for_set(
             Config.IMAGE_TR_DIR, Config.LABEL_TR_DIR, "Train", patient_info_map, mode
         )
         
+        # VAL_DIR에서 특징 추출
+        print("\n  Validation 디렉토리에서 특징 추출 중...")
         val_features_df = extractor.extract_features_for_set(
             Config.IMAGE_VAL_DIR, Config.LABEL_VAL_DIR, "Validation", patient_info_map, mode
         )
         
-        if train_features_df.empty:
-            print("\n오류: 학습 세트에서 특징 추출 실패. 프로그램을 종료합니다.")
-            return
+        print("\n  TR_DIR과 VAL_DIR 특징 병합 중...")
+        features_df = pd.concat([train_features_df, val_features_df], axis=0)
+        print(f"  총 {len(features_df)} 개의 샘플 병합됨 (TR: {len(train_features_df)}, VAL: {len(val_features_df)})")
 
         # 실제 데이터셋의 'severity' 분포 출력
-        if not train_features_df.empty and 'severity' in train_features_df.columns:
-            print("\n--- 학습 데이터셋 'severity' 분포 ---")
-            train_severity_counts = train_features_df['severity'].value_counts(dropna=False)
+        if 'severity' in features_df.columns:
+            print("\n--- 전체 데이터셋 'severity' 분포 ---")
+            severity_counts = features_df['severity'].value_counts(dropna=False)
             
             # 다중 분류인 경우 원하는 순서로 정렬
             if mode == 'multi':
                 class_order = ['normal', 'nonsevere', 'severe']
-                ordered_counts = pd.Series({cls: train_severity_counts.get(cls, 0) for cls in class_order if cls in train_severity_counts.index})
+                ordered_counts = pd.Series({cls: severity_counts.get(cls, 0) for cls in class_order if cls in severity_counts.index})
                 print(ordered_counts)
             else:
-                train_severity_distribution = train_severity_counts.sort_index()
-                print(train_severity_distribution)
-            print(f"총 학습 케이스 수: {len(train_features_df)}")
-
-        if not val_features_df.empty and 'severity' in val_features_df.columns:
-            print("\n--- 검증 데이터셋 'severity' 분포 ---")
-            val_severity_counts = val_features_df['severity'].value_counts(dropna=False)
-            
-            # 다중 분류인 경우 원하는 순서로 정렬
-            if mode == 'multi':
-                class_order = ['normal', 'nonsevere', 'severe']
-                ordered_counts = pd.Series({cls: val_severity_counts.get(cls, 0) for cls in class_order if cls in val_severity_counts.index})
-                print(ordered_counts)
-            else:
-                val_severity_distribution = val_severity_counts.sort_index()
-                print(val_severity_distribution)
-            print(f"총 검증 케이스 수: {len(val_features_df)}")
+                severity_distribution = severity_counts.sort_index()
+                print(severity_distribution)
+            print(f"총 데이터 케이스 수: {len(features_df)}")
         
-        # 3. 특징 저장
-        print("\n--- 3. 특징 저장 ---")
+        # 3. 데이터 분할 (Config에 설정된 비율, 클래스 비율 유지)
+        print("\n--- 3. 데이터 분할 ---")
+        data_splitter = DataSplitter()
+        train_features_df, val_features_df = data_splitter.split_data(features_df, mode)
+        
+        # 4. 특징 및 분할 정보 저장
+        print("\n--- 4. 특징 및 분할 정보 저장 ---")
         file_handler = FileHandler(output_dir, Config.FEATURE_SELECTION_METHOD)
+        
+        # 전체 데이터셋 저장
         file_handler.save_features_to_csv(
-            train_features_df, f'extracted_radiomics_features_train_{mode}.csv', "학습"
+            features_df, f'extracted_radiomics_features_all_{mode}.csv', "전체"
         )
         
-        if not val_features_df.empty:
-            file_handler.save_features_to_csv(
-                val_features_df, f'extracted_radiomics_features_val_{mode}.csv', "검증"
-            )
+        # 분할된 데이터셋 저장
+        file_handler.save_split_data(
+            train_features_df, val_features_df, f'radiomics_features_{mode}', mode
+        )
         
-        # 4. 데이터 전처리
-        print("\n--- 4. 데이터 전처리 ---")
+        # 5. 데이터 전처리
+        print("\n--- 5. 데이터 전처리 ---")
         preprocessor = DataPreprocessor(Config)
         processed_data = preprocessor.prepare_data(train_features_df, val_features_df)
         
-        # 5. 모델 학습 및 평가
-        print("\n--- 5. 모델 학습 및 평가 ---")
+        # 6. 모델 학습 및 평가
+        print("\n--- 6. 모델 학습 및 평가 ---")
         trainer = ModelTrainer(Config, preprocessor.label_encoder)
         results, prediction_results = trainer.train_and_evaluate(
             processed_data['x_train'], processed_data['y_train'],
             processed_data['x_val'], processed_data['y_val']
         )
         
-        # 6. 결과 시각화
-        print("\n--- 6. 결과 시각화 ---")
+        # 7. 결과 시각화
+        print("\n--- 7. 결과 시각화 ---")
         plotter = ResultPlotter(output_dir, preprocessor.label_encoder)
         plotter.plot_all_results(Config.FEATURE_SELECTION_METHOD, trainer.trained_models, prediction_results, results)
         
-        # 7. 결과 저장
-        print("\n--- 7. 결과 저장 ---")
+        # 8. 결과 저장
+        print("\n--- 8. 결과 저장 ---")
         file_handler.save_prediction_results(
             prediction_results, f'test_cases_prediction_results_{mode}.csv'
         )
