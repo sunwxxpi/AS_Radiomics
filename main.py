@@ -135,13 +135,10 @@ def run_pipeline(mode):
 def main():
     # 두 가지 모드로 파이프라인 실행
     print("===== Binary 분류 모드로 파이프라인 실행 =====")
-    binary_logger = run_pipeline('binary')
+    run_pipeline('binary')
     
     print("\n\n===== Multi-class 분류 모드로 파이프라인 실행 =====")
     run_pipeline('multi')
-    
-    if binary_logger:
-        sys.stdout = binary_logger.terminal
 
 if __name__ == "__main__":
     main()
