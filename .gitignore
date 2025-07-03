@@ -6,4 +6,5 @@ __pycache__
 
 radiomics_analysis_results/
 
+*.xlsx
 *.csv
