@@ -200,7 +200,7 @@ class FeatureSelector:
             )
         
         print(f"  특징 선택 완료: {x_train.shape[1]} → {len(selected_feature_names)}")
-        print(f"  선택된 특징 예시: {list(selected_feature_names[:5])}")
+        print(f"  선택된 특징: {list(selected_feature_names)}")
         
         # 선택 방법별 추가 정보 출력 (인수 없이 호출)
         try:
