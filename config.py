@@ -24,7 +24,7 @@ class Config:
     
     # 데이터 분할 설정
     DATA_SPLIT_RANDOM_STATE = 42  # 데이터 분할을 위한 랜덤 시드
-    TEST_SIZE_RATIO = 0.3         # 테스트 데이터 비율 (0.0 ~ 1.0)
+    TEST_SIZE_RATIO = 0.4         # 테스트 데이터 비율 (0.0 ~ 1.0)
 
     # 모델 하이퍼파라미터
     RANDOM_STATE = 42
