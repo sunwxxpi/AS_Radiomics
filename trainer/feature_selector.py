@@ -11,6 +11,7 @@ class FeatureSelector:
         self.config = config
         self.method = config.FEATURE_SELECTION_METHOD
         self.selector = None
+        self.lasso_analysis = None  # LASSO 분석 결과 저장용
         
     def select_features(self, x_train, y_train, x_val=None):
         """특징 선택 메인 함수"""
@@ -60,7 +61,7 @@ class FeatureSelector:
         cv_folds = min(self.config.CV_FOLDS, max(2, min_class_count))
         
         if self.method == 'lasso':
-            return self._create_lasso_selector(cv_folds)
+            return self._create_lasso_selector(cv_folds, x_train, y_train)
         elif self.method == 'rfe':
             return self._create_rfe_selector(x_train.shape[1])
         elif self.method == 'univariate':
@@ -73,8 +74,8 @@ class FeatureSelector:
             print(f"  경고: 알 수 없는 특징 선택 방법: {self.method}")
             return None
     
-    def _create_lasso_selector(self, cv_folds):
-        """Lasso 기반 특징 선택기 생성"""
+    def _create_lasso_selector(self, cv_folds, x_train, y_train):
+        """Lasso 기반 특징 선택기 생성 및 상세 분석"""
         print(f"  LassoCV 특징 선택 시작 (CV folds: {cv_folds})...")
         
         lasso_cv = LassoCV(
@@ -86,11 +87,87 @@ class FeatureSelector:
             n_alphas=self.config.LASSO_ALPHA_COUNT
         )
         
+        # LassoCV 학습하여 최적 계수 얻기
+        lasso_cv.fit(x_train, y_train)
+        
+        # LASSO 분석 결과 저장
+        feature_names = x_train.columns
+        coefficients = lasso_cv.coef_
+        
+        # 계수 분석
+        zero_coef_mask = np.abs(coefficients) < 1e-10  # 거의 0인 계수
+        threshold = self.config.FEATURE_THRESHOLD
+        below_threshold_mask = (np.abs(coefficients) > 1e-10) & (np.abs(coefficients) < threshold)
+        selected_mask = np.abs(coefficients) >= threshold
+        
+        self.lasso_analysis = {
+            'feature_names': feature_names,
+            'coefficients': coefficients,
+            'optimal_alpha': lasso_cv.alpha_,
+            'zero_coef_features': feature_names[zero_coef_mask].tolist(),
+            'below_threshold_features': feature_names[below_threshold_mask].tolist(),
+            'selected_features': feature_names[selected_mask].tolist(),
+            'zero_coef_count': np.sum(zero_coef_mask),
+            'below_threshold_count': np.sum(below_threshold_mask),
+            'selected_count': np.sum(selected_mask),
+            'threshold': threshold
+        }
+        
+        # 상세 분석 결과 출력
+        self._print_lasso_analysis()
+        
         return SelectFromModel(
             estimator=lasso_cv,
-            threshold=self.config.FEATURE_THRESHOLD
+            threshold=threshold,
+            prefit=True  # 이미 학습된 모델 사용
         )
     
+    def _print_lasso_analysis(self):
+        """LASSO 분석 결과 상세 출력"""
+        if self.lasso_analysis is None:
+            return
+        
+        analysis = self.lasso_analysis
+        total_features = len(analysis['feature_names'])
+        
+        print(f"    최적 alpha: {analysis['optimal_alpha']:.6f}")
+        print(f"    특징 선택 threshold: {analysis['threshold']:.6f}")
+        print(f"\n    === LASSO 특징 선택 분석 결과 ===")
+        print(f"    전체 특징 수: {total_features}")
+        print(f"    L1 정규화로 제거된 특징 (계수 ≈ 0): {analysis['zero_coef_count']} ({analysis['zero_coef_count']/total_features*100:.1f}%)")
+        print(f"    Threshold 미달로 제거된 특징: {analysis['below_threshold_count']} ({analysis['below_threshold_count']/total_features*100:.1f}%)")
+        print(f"    최종 선택된 특징: {analysis['selected_count']} ({analysis['selected_count']/total_features*100:.1f}%)")
+        
+        # 제거된 특징들의 계수값 분포 출력
+        if analysis['zero_coef_count'] > 0:
+            zero_coefs = analysis['coefficients'][np.abs(analysis['coefficients']) < 1e-10]
+            print(f"    L1 정규화로 제거된 특징의 계수 범위: [{np.min(np.abs(zero_coefs)):.2e}, {np.max(np.abs(zero_coefs)):.2e}]")
+        
+        if analysis['below_threshold_count'] > 0:
+            below_threshold_coefs = analysis['coefficients'][
+                (np.abs(analysis['coefficients']) > 1e-10) & 
+                (np.abs(analysis['coefficients']) < analysis['threshold'])
+            ]
+            print(f"    Threshold 미달 특징의 계수 범위: [{np.min(np.abs(below_threshold_coefs)):.6f}, {np.max(np.abs(below_threshold_coefs)):.6f}]")
+        
+        if analysis['selected_count'] > 0:
+            selected_coefs = analysis['coefficients'][np.abs(analysis['coefficients']) >= analysis['threshold']]
+            print(f"    선택된 특징의 계수 범위: [{np.min(np.abs(selected_coefs)):.6f}, {np.max(np.abs(selected_coefs)):.6f}]\n")
+        
+        if analysis['below_threshold_count'] > 0:
+            print(f"\n    Threshold 미달로 제거된 특징 예시 (최대 5개):")
+            below_threshold_features_with_coefs = [
+                (feature, analysis['coefficients'][list(analysis['feature_names']).index(feature)])
+                for feature in analysis['below_threshold_features']
+            ]
+            # 계수 절댓값으로 정렬
+            below_threshold_features_with_coefs.sort(key=lambda x: abs(x[1]), reverse=True)
+            
+            for i, (feature, coef) in enumerate(below_threshold_features_with_coefs[:5]):
+                print(f"      {feature}: {coef:.6f}")
+            if analysis['below_threshold_count'] > 5:
+                print(f"      ... 및 {analysis['below_threshold_count'] - 5}개 더")
+
     def _create_rfe_selector(self, n_features):
         """RFE 기반 특징 선택기 생성"""
         print("  RFE 특징 선택 시작...")
@@ -169,8 +246,9 @@ class FeatureSelector:
     
     def _apply_selection(self, x_train, x_val, y_train):
         """특징 선택 적용"""
-        # 선택기 학습
-        self.selector.fit(x_train, y_train)
+        # LASSO의 경우 이미 학습된 모델 사용, 그 외에는 학습 수행
+        if self.method != 'lasso':
+            self.selector.fit(x_train, y_train)
         
         # 선택된 특징 확인
         if hasattr(self.selector, 'get_support'):
@@ -200,9 +278,11 @@ class FeatureSelector:
             )
         
         print(f"  특징 선택 완료: {x_train.shape[1]} → {len(selected_feature_names)}")
-        print(f"  선택된 특징: {list(selected_feature_names)}")
+        print(f"  선택된 특징 ({len(selected_feature_names)}개):")
+        for i, feature_name in enumerate(selected_feature_names, 1):
+            print(f"    {i:2d}. {feature_name}")
         
-        # 선택 방법별 추가 정보 출력 (인수 없이 호출)
+        # 선택 방법별 추가 정보 출력
         try:
             self._print_selection_info()
         except Exception as e:
@@ -212,8 +292,9 @@ class FeatureSelector:
     
     def _print_selection_info(self):
         """선택 방법별 추가 정보 출력"""
-        if self.method == 'lasso' and hasattr(self.selector.estimator_, 'alpha_'):
-            print(f"    최적 alpha: {self.selector.estimator_.alpha_:.6f}")
+        if self.method == 'lasso':
+            # LASSO 분석 결과는 이미 _print_lasso_analysis()에서 출력됨
+            pass
         
         elif self.method == 'rfe' and hasattr(self.selector, 'ranking_'):
             print(f"    특징 순위 범위: {np.min(self.selector.ranking_)} ~ {np.max(self.selector.ranking_)}")

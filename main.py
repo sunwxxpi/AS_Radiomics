@@ -87,19 +87,21 @@ def run_pipeline(mode):
         file_handler = FileHandler(output_dir, Config.FEATURE_SELECTION_METHOD)
         
         # 전체 데이터셋 저장
-        file_handler.save_features_to_csv(
-            features_df, f'extracted_radiomics_features_all_{mode}.csv', "전체"
-        )
+        file_handler.save_features_to_csv(features_df, f'radiomics_features_all.csv', "전체")
         
         # 분할된 데이터셋 저장
-        file_handler.save_split_data(
-            train_features_df, val_features_df, f'radiomics_features_{mode}', mode
-        )
+        file_handler.save_split_data(train_features_df, val_features_df, f'radiomics_features', mode)
         
         # 5. 데이터 전처리
         print("\n--- 5. 데이터 전처리 ---")
         preprocessor = DataPreprocessor(Config)
         processed_data = preprocessor.prepare_data(train_features_df, val_features_df)
+        
+        # LASSO 분석 결과 저장 (LASSO 방법을 사용한 경우)
+        if Config.FEATURE_SELECTION_METHOD == 'lasso':
+            lasso_analysis = preprocessor.get_lasso_analysis()
+            if lasso_analysis is not None:
+                file_handler.save_lasso_analysis(lasso_analysis, f'lasso_feature_analysis.csv')
         
         # 6. 모델 학습 및 평가
         print("\n--- 6. 모델 학습 및 평가 ---")
@@ -116,10 +118,8 @@ def run_pipeline(mode):
         
         # 8. 결과 저장
         print("\n--- 8. 결과 저장 ---")
-        file_handler.save_prediction_results(
-            prediction_results, f'test_cases_prediction_results_{mode}.csv'
-        )
-        file_handler.save_model_summary(results, f'model_validation_summary_{mode}.csv')
+        file_handler.save_prediction_results(prediction_results, f'test_cases_prediction_results.csv')
+        file_handler.save_model_summary(results, f'model_validation_summary.csv')
         
         print(f"\n{mode} 모드 분석 과정 완료. 결과는 '{output_dir}' 폴더에 저장되었습니다.")
         
@@ -134,8 +134,8 @@ def run_pipeline(mode):
 
 def main():
     # 두 가지 모드로 파이프라인 실행
-    print("===== Binary 분류 모드로 파이프라인 실행 =====")
-    run_pipeline('binary')
+    # print("===== Binary 분류 모드로 파이프라인 실행 =====")
+    # run_pipeline('binary')
     
     print("\n\n===== Multi-class 분류 모드로 파이프라인 실행 =====")
     run_pipeline('multi')

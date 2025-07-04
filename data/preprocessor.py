@@ -46,6 +46,12 @@ class DataPreprocessor:
             'y_val': y_val_encoded
         }
     
+    def get_lasso_analysis(self):
+        """LASSO 분석 결과 반환"""
+        if hasattr(self.feature_selector, 'lasso_analysis'):
+            return self.feature_selector.lasso_analysis
+        return None
+    
     def _split_features_labels(self, df):
         """특징과 레이블 분리"""
         if df is None or df.empty:

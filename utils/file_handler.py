@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import pandas as pd
 
 class FileHandler:
@@ -137,3 +138,31 @@ class FileHandler:
         
         print(f"  학습 데이터 저장 완료: {train_path} ({len(train_df)} 샘플)")
         print(f"  테스트 데이터 저장 완료: {test_path} ({len(test_df)} 샘플)")
+    
+    def save_lasso_analysis(self, lasso_analysis, filename=None):
+        """LASSO 특징 선택 분석 결과를 CSV로 저장"""
+        if lasso_analysis is None:
+            print("  LASSO 분석 결과가 없습니다.")
+            return
+        
+        if filename is None:
+            filename = 'lasso_feature_analysis.csv'
+        
+        # 특징별 분석 결과 DataFrame 생성
+        analysis_df = pd.DataFrame({
+            'feature_name': lasso_analysis['feature_names'],
+            'coefficient': lasso_analysis['coefficients'],
+            'abs_coefficient': np.abs(lasso_analysis['coefficients']),
+            'selection_status': ['L1_regularized' if abs(coef) < 1e-10 
+                               else 'below_threshold' if abs(coef) < lasso_analysis['threshold']
+                               else 'selected' 
+                               for coef in lasso_analysis['coefficients']]
+        })
+        
+        # 절댓값 기준으로 내림차순 정렬
+        analysis_df = analysis_df.sort_values('abs_coefficient', ascending=False)
+        
+        file_path = os.path.join(self.output_dir, filename)
+        analysis_df.to_csv(file_path, index=False)
+        
+        print(f"  LASSO 특징 분석 결과 저장 완료: {file_path}")
