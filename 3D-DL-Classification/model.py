@@ -23,4 +23,4 @@ class CustomModel(nn.Module):
         self.net.fc = torch.nn.Linear(self.in_features, class_num)
         
     def forward(self, images=None):
-        return self.net(images) # 더 간결하게 표현 가능
+        return self.net(images)
