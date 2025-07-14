@@ -10,4 +10,5 @@ radiomics_analysis_results/
 *.csv
 
 3D-DL-Classification/logs/
-3D-DL-Classification/weight/
+3D-DL-Classification/weights/
+3D-DL-Classification/results/

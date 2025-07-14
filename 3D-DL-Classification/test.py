@@ -61,7 +61,7 @@ def evaluate_single_fold(labels, probs, class_names, config, fold_number):
     print(class_report)
 
     # Confusion matrix 저장 경로
-    output_path = os.path.join('./3D-DL-Classification', './result', config.writer_comment)
+    output_path = os.path.join('./3D-DL-Classification', './results', config.writer_comment)
     conf_matrix_plot_path = os.path.join(output_path, 'conf_matrix', f'fold_{fold_number}.png')
 
     # Confusion matrix 그리기
