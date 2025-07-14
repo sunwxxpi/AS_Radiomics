@@ -8,7 +8,7 @@ import dataset
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, classification_report
-from model import CustomModel
+from model import CustomModel, nnUNetClassificationModel
 from dl_cls_config import load_config
 
 
@@ -26,7 +26,16 @@ def plot_confusion_matrix(conf_matrix, class_names, accuracy, f1, output_path):
 
 
 def load_model(model_path, config):
-    model = CustomModel(class_num=config.class_num)
+    if config.model_type == 'nnunet':
+        encoder_config = {
+            'plans_file': config.nnunet_plans_file,
+            'dataset_json_file': config.nnunet_dataset_json,
+            'checkpoint_file': config.nnunet_checkpoint,
+            'configuration': config.nnunet_configuration
+        }
+        model = nnUNetClassificationModel(class_num=config.class_num, pretrained_encoder_path=encoder_config)
+    else:
+        model = CustomModel(class_num=config.class_num)
     
     model.load_state_dict(torch.load(model_path))
     if torch.cuda.device_count() > 1:

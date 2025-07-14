@@ -10,7 +10,7 @@ from sklearn.model_selection import StratifiedKFold
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 from dl_cls_config import load_config
-from model import CustomModel
+from model import CustomModel, nnUNetClassificationModel
 from valid import validate
 
 
@@ -48,7 +48,18 @@ def train(config, train_loader, val_loader, fold):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # MODEL
-    model = CustomModel(class_num=config.class_num)
+    if config.model_type == 'nnunet':
+        encoder_config = {
+            'plans_file': config.nnunet_plans_file,
+            'dataset_json_file': config.nnunet_dataset_json,
+            'checkpoint_file': config.nnunet_checkpoint,
+            'configuration': config.nnunet_configuration
+        }
+        model = nnUNetClassificationModel(class_num=config.class_num, pretrained_encoder_path=encoder_config)
+        print(f"✓ Using nnUNet encoder model with {config.class_num} classes")
+    else:
+        model = CustomModel(class_num=config.class_num)
+        print(f"✓ Using custom MONAI ResNet50 model with {config.class_num} classes")
     
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)

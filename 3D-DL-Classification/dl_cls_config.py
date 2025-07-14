@@ -16,6 +16,19 @@ def load_config():
     parser.add_argument('--log_step', type=int, default=1)
     parser.add_argument('--lr', type=float, default=5e-6)
 
+    # MODEL TYPE SELECTION
+    parser.add_argument('--model_type', type=str, default='custom', choices=['custom', 'nnunet'], 
+                       help='Model type: custom (MONAI ResNet50) or nnunet (nnUNet encoder)')
+
+    # nnUNet SPECIFIC PARAMETERS
+    parser.add_argument('--nnunet_plans_file', type=str, 
+                       default='./3D-DL-Classification/nnUNet/nnUNetResEncUNetLPlans.json')
+    parser.add_argument('--nnunet_dataset_json', type=str, 
+                       default='./3D-DL-Classification/nnUNet/dataset.json')
+    parser.add_argument('--nnunet_checkpoint', type=str, 
+                       default='./3D-DL-Classification/nnUNet/checkpoint_final.pth')
+    parser.add_argument('--nnunet_configuration', type=str, default='3d_fullres')
+
     parser.add_argument('--loss_function', type=str, default='CE')
     parser.add_argument('--optimizer', type=str, default='AdamW', choices=['SGD', 'Adam', 'AdamW'])
     parser.add_argument('--scheduler', type=str, default='cosine', choices=['cosine', 'step'])
