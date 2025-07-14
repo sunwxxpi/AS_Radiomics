@@ -16,7 +16,7 @@ class Config:
     LABEL_VAL_DIR = os.path.join(BASE_DIR, 'labelsVal')
     
     # 분류 모드 설정 (binary 또는 multi)
-    CLASSIFICATION_MODE = 'binary'  # 기본값은 binary 분류
+    CLASSIFICATION_MODE = 'multi'  # 기본값은 multi 분류
     
     # Dilation 설정
     ENABLE_DILATION = False   # Dilation 사용 여부
