@@ -66,7 +66,8 @@ def train(config, train_loader, val_loader, fold):
     model = model.to(device)
 
     # LOSS FUNCTION
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.1).to(device) if config.loss_function == 'CE' else None
+    weight = torch.tensor([1.0/0.209, 1.0/0.096, 1.0/0.696], dtype=torch.float).to(device)
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1, weight=weight).to(device) if config.loss_function == 'CE' else None
 
     # OPTIMIZER
     optimizer = {
