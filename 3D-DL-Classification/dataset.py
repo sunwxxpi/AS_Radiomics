@@ -73,7 +73,10 @@ class ASDataset(Dataset):
         # numpy array를 torch tensor로 변환하기 위해 float32로 변환
         img_data = img_data.astype(np.float32)
         
-        # 채널 차원 수동 추가 (H, W, D) -> (1, H, W, D)
+        # NIfTI 기본 순서 (W, H, D)를 PyTorch 표준 (D, H, W)로 transpose
+        img_data = np.transpose(img_data, (2, 1, 0))  # (W, H, D) -> (D, H, W)
+        
+        # 채널 차원 추가 (D, H, W) -> (1, D, H, W)
         if len(img_data.shape) == 3:
             img_data = img_data[np.newaxis, ...]  # 첫 번째 차원에 채널 추가
         
@@ -184,7 +187,7 @@ def get_as_dataset(img_size, mode='train'):
     # Cardiac CT에 적합한 Augmentation
     train_transform = Compose([
         # 좌우 반전만 유지 (심장은 좌우 대칭성이 있음)
-        RandFlip(prob=0.5, spatial_axis=0),  # 좌우 반전만
+        RandFlip(prob=0.5, spatial_axis=2),  # 좌우 반전만
         # 회전 범위 크게 줄임 (심장의 해부학적 방향성 보존)
         RandAffine(prob=0.5, rotate_range=(np.pi/30, np.pi/30, np.pi/30), 
                   scale_range=(0.05, 0.05, 0.05), padding_mode='zeros'),
@@ -193,12 +196,12 @@ def get_as_dataset(img_size, mode='train'):
         # 가우시안 노이즈 크게 줄임 (칼슘의 고밀도 특성 보존)
         RandGaussianNoise(prob=0.3, std=0.01),
         ct_normalization,
-        Resize((img_size, img_size, img_size/2), mode='trilinear'),
+        Resize((img_size/2, img_size, img_size), mode='trilinear'),
     ])
     
     test_transform = Compose([
         ct_normalization,
-        Resize((img_size, img_size, img_size/2), mode='trilinear')
+        Resize((img_size/2, img_size, img_size), mode='trilinear')
     ])
     
     if mode == 'train':
