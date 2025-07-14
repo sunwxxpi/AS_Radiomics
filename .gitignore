@@ -8,3 +8,6 @@ radiomics_analysis_results/
 
 *.xlsx
 *.csv
+
+3D-DL-Classification/logs/
+3D-DL-Classification/weight/
