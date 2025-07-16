@@ -1,7 +1,7 @@
+import json
 import torch
 import torch.nn as nn
 import monai
-import json
 from nnunetv2.utilities.plans_handling.plans_handler import PlansManager
 from nnunetv2.utilities.get_network_from_plans import get_network_from_plans
     

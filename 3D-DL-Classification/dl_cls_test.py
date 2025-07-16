@@ -4,11 +4,11 @@ import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import dataset
+import dl_cls_dataset
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, classification_report
-from model import CustomModel, nnUNetClassificationModel
+from dl_cls_model import CustomModel, nnUNetClassificationModel
 from dl_cls_config import load_config
 
 
@@ -109,7 +109,7 @@ def main():
 
     # AS 데이터셋을 한 번만 로드
     print("데이터셋 로딩 중...")
-    test_dataset, label_to_idx, idx_to_label, unique_labels = dataset.get_as_dataset(config.img_size, mode='test')
+    test_dataset, label_to_idx, idx_to_label, unique_labels = dl_cls_dataset.get_as_dataset(config.img_size, mode='test')
     # 실제 클래스 수로 업데이트
     config.class_num = len(unique_labels)
     print(f"AS 데이터셋 로드 완료. 클래스 수: {config.class_num}")

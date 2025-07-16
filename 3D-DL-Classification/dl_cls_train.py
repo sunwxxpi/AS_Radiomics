@@ -4,14 +4,14 @@ import math
 import numpy as np
 import torch
 import torch.nn as nn
-import dataset
+import dl_cls_dataset
 from tqdm import tqdm
 from sklearn.model_selection import StratifiedKFold
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 from dl_cls_config import load_config
-from model import CustomModel, nnUNetClassificationModel
-from valid import validate
+from dl_cls_model import CustomModel, nnUNetClassificationModel
+from dl_cls_valid import validate
 
 
 def seed_torch(seed=1):
@@ -177,7 +177,7 @@ if __name__ == '__main__':
     cv = StratifiedKFold(n_splits=args.fold, random_state=42, shuffle=True)
     
     # AS 데이터셋 사용
-    train_set, label_to_idx, idx_to_label, unique_labels = dataset.get_as_dataset(args.img_size, mode='train')
+    train_set, label_to_idx, idx_to_label, unique_labels = dl_cls_dataset.get_as_dataset(args.img_size, mode='train')
     # 실제 클래스 수로 업데이트
     args.class_num = len(unique_labels)
     print(f"AS 데이터셋 로드 완료. 클래스 수: {args.class_num}")

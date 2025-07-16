@@ -196,12 +196,14 @@ def get_as_dataset(img_size, mode='train'):
         # 가우시안 노이즈 크게 줄임 (칼슘의 고밀도 특성 보존)
         RandGaussianNoise(prob=0.3, std=0.01),
         ct_normalization,
-        Resize((img_size/2, img_size, img_size), mode='trilinear'),
+        # Resize((img_size/2, img_size, img_size), mode='trilinear'),
+        Resize((img_size/5, img_size, img_size), mode='trilinear'),
     ])
     
     test_transform = Compose([
         ct_normalization,
-        Resize((img_size/2, img_size, img_size), mode='trilinear')
+        # Resize((img_size/2, img_size, img_size), mode='trilinear')
+        Resize((img_size/5, img_size, img_size), mode='trilinear')
     ])
     
     if mode == 'train':
