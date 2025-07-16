@@ -23,7 +23,7 @@ class CustomModel(nn.Module):
         )
     
         self.in_features = self.net.in_planes
-        self.net.fc = torch.nn.Linear(self.in_features, class_num)
+        self.net.fc = nn.Linear(self.in_features, class_num)
         
     def forward(self, images=None):
         return self.net(images)
@@ -79,7 +79,7 @@ class nnUNetClassificationModel(nn.Module):
             raise ValueError("pretrained_encoder_path is required for nnUNetClassificationModel")
         
         # Classification head
-        self.classifier = nn.Sequential(
+        """ self.classifier = nn.Sequential(
             nn.Dropout(0.5),
             nn.Linear(feature_dim, 512),
             nn.ReLU(),
@@ -88,7 +88,8 @@ class nnUNetClassificationModel(nn.Module):
             nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(256, class_num)
-        )
+        ) """
+        self.classifier = nn.Linear(feature_dim, class_num)
     
     def _load_pretrained_encoder(self, encoder_config):
         """Load pretrained nnUNet encoder"""
