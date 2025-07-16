@@ -7,16 +7,7 @@ import numpy as np
 import torch
 from glob import glob
 from torch.utils.data.dataset import Dataset
-from monai.transforms import Compose, RandFlip, RandAffine, Rand3DElastic, RandAdjustContrast, RandGaussianNoise, Resize
-
-# AS Radiomics 프로젝트의 모듈들 import
-# config.py 파일이 있는 디렉토리 경로
-# '/home/psw/AS_Radiomics'를 sys.path에 추가합니다.
-config_dir = '/home/psw/AS_Radiomics'
-if config_dir not in sys.path:
-    sys.path.append(config_dir)
-
-# 이제 'config' 모듈을 직접 임포트할 수 있습니다.
+from monai.transforms import Compose, RandFlip, RandAffine, RandAdjustContrast, RandGaussianNoise, Resize
 from config import Config
 from data.loader import DataLoader as ASDataLoader
 from utils.data_splitter import DataSplitter

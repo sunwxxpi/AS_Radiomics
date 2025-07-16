@@ -4,11 +4,11 @@ import argparse
 def load_config():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', type=str, default='./3D-DL-Classification/weights')
-    parser.add_argument('--writer_comment', type=str, default='3D_DL_CLS')
+    parser.add_argument('--writer_comment', type=str, default='default')
     parser.add_argument('--save_model', type=bool, default=True)
 
     # MODEL PARAMETER
-    parser.add_argument('--img_size', type=int, default=224)
+    parser.add_argument('--img_size', type=int, default=320)
     parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--class_num', type=int, default=3)
     parser.add_argument('--fold', type=int, default=5)
