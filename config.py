@@ -18,8 +18,24 @@ class Config:
     # 분류 모드 설정 (binary 또는 multi)
     CLASSIFICATION_MODE = 'multi'  # 기본값은 multi 분류
     
+    # DL Embedding 특징 설정
+    ENABLE_DL_EMBEDDING = True   # DL embedding 특징 사용 여부
+    DL_MODEL_TYPE = 'custom'     # 'custom' 또는 'nnunet'
+    DL_IMG_SIZE = 320            # DL 모델 입력 이미지 크기
+    DL_COMMENT_WRITER = 'default'
+    FOLD = 5
+    DL_MODEL_PATH = f'./3D-DL-Classification/weights/{DL_COMMENT_WRITER}/{FOLD}/best_model.pth'
+
+    # nnUNet 관련 설정 (DL_MODEL_TYPE이 'nnunet'인 경우)
+    DL_NNUNET_CONFIG = {
+        'plans_file': './3D-DL-Classification/nnUNet/nnUNetResEncUNetLPlans.json',
+        'dataset_json_file': './3D-DL-Classification/nnUNet/dataset.json',
+        'checkpoint_file': './3D-DL-Classification/nnUNet/checkpoint_final.pth',
+        'configuration': '3d_fullres'
+    }
+    
     # Dilation 설정
-    ENABLE_DILATION = False   # Dilation 사용 여부
+    ENABLE_DILATION = True   # Dilation 사용 여부
     DILATION_ITERATIONS = 1   # Dilation 반복 횟수
     
     # 데이터 분할 설정
@@ -134,14 +150,19 @@ class Config:
     
     @classmethod
     def ensure_output_dir(cls):
-        """특징 선택 방법과 실행 시간, 분류 모드, dilation 설정에 따른 출력 디렉토리 생성"""
+        """특징 선택 방법과 실행 시간, 분류 모드, dilation 설정, DL embedding에 따른 출력 디렉토리 생성"""
         timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-        mode_suffix = "_binary" if cls.CLASSIFICATION_MODE == 'binary' else "_multi"
+        mode_suffix = "binary" if cls.CLASSIFICATION_MODE == 'binary' else "multi"
         
         # Dilation 정보 추가
         dilation_suffix = ""
         if cls.ENABLE_DILATION:
-            dilation_suffix = f"_dil{cls.DILATION_ITERATIONS}"
+            dilation_suffix = f"dil{cls.DILATION_ITERATIONS}"
+        
+        # DL embedding 정보 추가
+        dl_suffix = ""
+        if cls.ENABLE_DL_EMBEDDING:
+            dl_suffix = f"dl{cls.DL_MODEL_TYPE}"
         
         # 데이터셋 타입에 따라 하위 디렉토리 결정
         dataset_type = cls._get_dataset_type()
@@ -149,11 +170,11 @@ class Config:
         output_dir = os.path.join(
             cls.BASE_OUTPUT_DIR,
             dataset_type,
-            f'{cls.FEATURE_SELECTION_METHOD}_fs_{timestamp}{mode_suffix}{dilation_suffix}'
+            f'{cls.FEATURE_SELECTION_METHOD}_fs_{timestamp}_{mode_suffix}_{dl_suffix}_{dilation_suffix}'
         )
         os.makedirs(output_dir, exist_ok=True)
         return output_dir
-
+    
     @classmethod
     def get_available_feature_methods(cls):
         """사용 가능한 특징 선택 방법 목록 반환"""
@@ -179,6 +200,10 @@ class Config:
         print(f"Dilation 사용: {cls.ENABLE_DILATION}")
         if cls.ENABLE_DILATION:
             print(f"Dilation 반복 횟수: {cls.DILATION_ITERATIONS}")
+        print(f"DL Embedding 사용: {cls.ENABLE_DL_EMBEDDING}")
+        if cls.ENABLE_DL_EMBEDDING:
+            print(f"DL 모델 타입: {cls.DL_MODEL_TYPE}")
+            print(f"DL 모델 경로: {cls.DL_MODEL_PATH}")
         print(f"랜덤 시드: {cls.RANDOM_STATE}")
         print(f"CV 폴드 수: {cls.CV_FOLDS}")
         print("========================")

@@ -36,12 +36,25 @@ def run_pipeline(mode):
         
         # 2. Radiomics 특징 추출
         print("\n--- 2. Radiomics 특징 추출 ---")
+        if Config.ENABLE_DL_EMBEDDING:
+            print(f"  DL Embedding 활성화: {Config.DL_MODEL_TYPE} 모델 사용")
+            if not os.path.exists(Config.DL_MODEL_PATH):
+                print(f"  경고: DL 모델 파일을 찾을 수 없습니다: {Config.DL_MODEL_PATH}")
+                print("  DL embedding 없이 계속 진행합니다.")
+                Config.ENABLE_DL_EMBEDDING = False
+        else:
+            print("  DL Embedding 비활성화")
+            
         if Config.ENABLE_DILATION:
             print(f"  Dilation 활성화: {Config.DILATION_ITERATIONS}회 팽창 적용")
         else:
             print("  원본 마스크 사용 (Dilation 비활성화)")
-            
+        
         extractor = RadiomicsExtractor(
+            enable_dl_embedding=Config.ENABLE_DL_EMBEDDING,
+            dl_model_path=Config.DL_MODEL_PATH if Config.ENABLE_DL_EMBEDDING else None,
+            dl_model_type=Config.DL_MODEL_TYPE if Config.ENABLE_DL_EMBEDDING else 'custom',
+            dl_nnunet_config=Config.DL_NNUNET_CONFIG if Config.ENABLE_DL_EMBEDDING and Config.DL_MODEL_TYPE == 'nnunet' else None,
             enable_dilation=Config.ENABLE_DILATION,
             dilation_iterations=Config.DILATION_ITERATIONS
         )
