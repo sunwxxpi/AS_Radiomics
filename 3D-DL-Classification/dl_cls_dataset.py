@@ -8,6 +8,11 @@ import torch
 from glob import glob
 from torch.utils.data.dataset import Dataset
 from monai.transforms import Compose, RandFlip, RandAffine, RandAdjustContrast, RandGaussianNoise, Resize
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
 from config import Config
 from data.loader import DataLoader as ASDataLoader
 from utils.data_splitter import DataSplitter
