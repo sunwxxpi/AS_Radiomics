@@ -100,9 +100,12 @@ class FeatureSelector:
         below_threshold_mask = (np.abs(coefficients) > 1e-10) & (np.abs(coefficients) < threshold)
         selected_mask = np.abs(coefficients) >= threshold
         
+        # 절댓값 기준으로 정렬된 인덱스 생성
+        sorted_indices = np.argsort(np.abs(coefficients))[::-1]  # 내림차순 정렬
+        
         self.lasso_analysis = {
-            'feature_names': feature_names,
-            'coefficients': coefficients,
+            'feature_names': feature_names[sorted_indices],
+            'coefficients': coefficients[sorted_indices],
             'optimal_alpha': lasso_cv.alpha_,
             'zero_coef_features': feature_names[zero_coef_mask].tolist(),
             'below_threshold_features': feature_names[below_threshold_mask].tolist(),
@@ -119,7 +122,7 @@ class FeatureSelector:
         return SelectFromModel(
             estimator=lasso_cv,
             threshold=threshold,
-            prefit=True  # 이미 학습된 모델 사용
+            prefit=True
         )
     
     def _print_lasso_analysis(self):

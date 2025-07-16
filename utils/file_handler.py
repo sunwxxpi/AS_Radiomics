@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
+from natsort import natsorted
 
 class FileHandler:
     """파일 저장을 담당하는 클래스"""
@@ -159,10 +160,32 @@ class FileHandler:
                                for coef in lasso_analysis['coefficients']]
         })
         
-        # 절댓값 기준으로 내림차순 정렬
-        analysis_df = analysis_df.sort_values('abs_coefficient', ascending=False)
+        # 상태별로 분리하여 각각 정렬
+        selected_df = analysis_df[analysis_df['selection_status'] == 'selected'].copy()
+        below_threshold_df = analysis_df[analysis_df['selection_status'] == 'below_threshold'].copy()
+        l1_regularized_df = analysis_df[analysis_df['selection_status'] == 'L1_regularized'].copy()
+        
+        # 각 그룹별로 정렬
+        # 선택된 특징: 계수 절댓값 기준 내림차순
+        if not selected_df.empty:
+            selected_df = selected_df.sort_values('abs_coefficient', ascending=False)
+        
+        # Threshold 미달 특징: 계수 절댓값 기준 내림차순
+        if not below_threshold_df.empty:
+            below_threshold_df = below_threshold_df.sort_values('abs_coefficient', ascending=False)
+        
+        # L1 정규화된 특징: 특징명 기준 오름차순
+        if not l1_regularized_df.empty:
+            natural_sorted_indices = natsorted(
+                range(len(l1_regularized_df)), 
+                key=lambda i: l1_regularized_df.iloc[i]['feature_name']
+            )
+            l1_regularized_df = l1_regularized_df.iloc[natural_sorted_indices].reset_index(drop=True)
+        
+        # 정렬된 데이터프레임들을 다시 합침
+        final_df = pd.concat([selected_df, below_threshold_df, l1_regularized_df], ignore_index=True)
         
         file_path = os.path.join(self.output_dir, filename)
-        analysis_df.to_csv(file_path, index=False)
+        final_df.to_csv(file_path, index=False)
         
         print(f"  LASSO 특징 분석 결과 저장 완료: {file_path}")
