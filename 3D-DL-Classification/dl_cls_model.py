@@ -12,21 +12,28 @@ class CustomModel(nn.Module):
         
         self.num_classes = class_num
         
-        self.net = monai.networks.nets.resnet50(
+        self.backbone = monai.networks.nets.resnet50(
             pretrained=True,
             spatial_dims=3,
             n_input_channels=1,
             num_classes=class_num,
-            feed_forward=False,
+            feed_forward=False,  # FC layer 제외
             shortcut_type='B',
             bias_downsample=False
         )
-    
-        self.in_features = self.net.in_planes
-        self.net.fc = nn.Linear(self.in_features, class_num)
+        
+        # Feature dimension 추출
+        self.in_features = self.backbone.in_planes
+        
+        # Classification head 별도 정의
+        self.classifier = nn.Linear(self.in_features, class_num)
         
     def forward(self, images=None):
-        return self.net(images)
+        """전체 forward pass (backbone + classifier)"""
+        features = self.backbone(images)
+        logits = self.classifier(features)
+        
+        return logits
 
 
 class nnUNetEncoder(nn.Module):
