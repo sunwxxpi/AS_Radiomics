@@ -96,7 +96,7 @@ def evaluate_ensemble(all_labels, all_probs, class_names, config):
         print(class_report)
 
         # Confusion matrix 저장 경로
-        output_path = os.path.join('./3D-DL-Classification', './result', config.writer_comment)
+        output_path = os.path.join('./3D-DL-Classification', './results', config.writer_comment)
         conf_matrix_plot_path = os.path.join(output_path, 'conf_matrix', f'ensemble_{voting_type.lower().replace(" ", "_")}.png')
 
         # Confusion matrix 그리기
