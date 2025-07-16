@@ -73,13 +73,13 @@ class nnUNetClassificationModel(nn.Module):
         self.num_classes = class_num
         
         if pretrained_encoder_path:
-            # Load pretrained nnUNet encoder
-            self.encoder = self._load_pretrained_encoder(pretrained_encoder_path)
+            # Load pretrained nnUNet backbone
+            self.backbone = self._load_pretrained_backbone(pretrained_encoder_path)
             
             # Feature dimension 자동 계산
             with torch.no_grad():
                 dummy_input = torch.randn(1, 1, 64, 64, 64)
-                dummy_output = self.encoder(dummy_input)
+                dummy_output = self.backbone(dummy_input)
                 feature_dim = dummy_output.shape[1]
                 print(f"Detected feature dimension: {feature_dim}")
         else:
@@ -98,8 +98,8 @@ class nnUNetClassificationModel(nn.Module):
         ) """
         self.classifier = nn.Linear(feature_dim, class_num)
     
-    def _load_pretrained_encoder(self, encoder_config):
-        """Load pretrained nnUNet encoder"""
+    def _load_pretrained_backbone(self, encoder_config):
+        """Load pretrained nnUNet backbone"""
         plans_file = encoder_config.get('plans_file', './3D-DL-Classification/nnUNet/nnUNetResEncUNetLPlans.json')
         dataset_json_file = encoder_config.get('dataset_json_file', './3D-DL-Classification/nnUNet/dataset.json')
         checkpoint_file = encoder_config.get('checkpoint_file', './3D-DL-Classification/nnUNet/checkpoint_final.pth')
@@ -149,6 +149,6 @@ class nnUNetClassificationModel(nn.Module):
         return encoder
     
     def forward(self, images=None):
-        features = self.encoder(images)
+        features = self.backbone(images)
         logits = self.classifier(features)
         return logits
