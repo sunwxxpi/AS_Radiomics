@@ -22,10 +22,10 @@ class Config:
     ENABLE_DL_EMBEDDING = True   # DL embedding 특징 사용 여부
     DL_MODEL_TYPE = 'custom'     # 'custom' 또는 'nnunet'
     DL_IMG_SIZE = 320            # DL 모델 입력 이미지 크기
-    DL_COMMENT_WRITER = 'default'
-    FOLD = 5
+    DL_COMMENT_WRITER = 'Default'
+    FOLD = None                  # None이면 1~5 모든 fold 사용, 숫자면 해당 fold만 사용
     DL_MODEL_PATH = f'./3D-DL-Classification/weights/{DL_COMMENT_WRITER}/{FOLD}/best_model.pth'
-
+    
     # nnUNet 관련 설정 (DL_MODEL_TYPE이 'nnunet'인 경우)
     DL_NNUNET_CONFIG = {
         'plans_file': './3D-DL-Classification/nnUNet/nnUNetResEncUNetLPlans.json',
@@ -41,6 +41,21 @@ class Config:
     # 데이터 분할 설정
     DATA_SPLIT_RANDOM_STATE = 42  # 데이터 분할을 위한 랜덤 시드
     TEST_SIZE_RATIO = 0.4         # 테스트 데이터 비율 (0.0 ~ 1.0)
+    
+    @classmethod
+    def get_dl_model_paths(cls):
+        """FOLD 설정에 따라 DL 모델 경로 딕셔너리 반환"""
+        if cls.FOLD is None:
+            # 모든 fold (1~5) 사용
+            return {
+                fold: f'./3D-DL-Classification/weights/{cls.DL_COMMENT_WRITER}/{fold}/best_model.pth'
+                for fold in range(1, 6)
+            }
+        else:
+            # 특정 fold만 사용
+            return {
+                cls.FOLD: f'./3D-DL-Classification/weights/{cls.DL_COMMENT_WRITER}/{cls.FOLD}/best_model.pth'
+            }
 
     # 모델 하이퍼파라미터
     RANDOM_STATE = 42

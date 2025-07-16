@@ -157,7 +157,9 @@ class DLEmbeddingExtractor:
             for i, feature_value in enumerate(features, 1):
                 dl_features[f'dl_embedding_feature_{i}'] = float(feature_value)
             
-            print(f"      DL embedding 추출 성공: {len(features)} dim")
+            # 파일명과 함께 성공 메시지 출력
+            image_filename = os.path.basename(image_path)
+            print(f"      DL embedding 추출 성공: {image_filename} ({len(features)} dim)")
             return dl_features
             
         except Exception as e:
