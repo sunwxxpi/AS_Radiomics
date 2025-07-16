@@ -157,12 +157,12 @@ class Config:
         # Dilation 정보 추가
         dilation_suffix = ""
         if cls.ENABLE_DILATION:
-            dilation_suffix = f"dil{cls.DILATION_ITERATIONS}"
+            dilation_suffix = f"_dil{cls.DILATION_ITERATIONS}"
         
         # DL embedding 정보 추가
         dl_suffix = ""
         if cls.ENABLE_DL_EMBEDDING:
-            dl_suffix = f"dl{cls.DL_MODEL_TYPE}"
+            dl_suffix = f"_dl{cls.DL_MODEL_TYPE}"
         
         # 데이터셋 타입에 따라 하위 디렉토리 결정
         dataset_type = cls._get_dataset_type()
@@ -170,7 +170,7 @@ class Config:
         output_dir = os.path.join(
             cls.BASE_OUTPUT_DIR,
             dataset_type,
-            f'{cls.FEATURE_SELECTION_METHOD}_fs_{timestamp}_{mode_suffix}_{dl_suffix}_{dilation_suffix}'
+            f'{cls.FEATURE_SELECTION_METHOD}_fs_{timestamp}_{mode_suffix}{dl_suffix}{dilation_suffix}'
         )
         os.makedirs(output_dir, exist_ok=True)
         return output_dir
