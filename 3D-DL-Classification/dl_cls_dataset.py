@@ -180,6 +180,14 @@ def get_as_dataset(img_size, mode='train'):
         upper_bound=1298.0
     )
     
+    # img_size가 튜플이 아닌 경우 튜플로 변환
+    if isinstance(img_size, (int, float)):
+        img_size = (int(img_size), int(img_size), int(img_size))
+    elif isinstance(img_size, (tuple, list)) and len(img_size) == 3:
+        img_size = tuple(int(x) for x in img_size)
+    else:
+        raise ValueError(f"img_size는 정수 또는 3개 요소의 튜플이어야 합니다. 받은 값: {img_size}")
+    
     # Cardiac CT에 적합한 Augmentation
     train_transform = Compose([
         # 좌우 반전만 유지 (심장은 좌우 대칭성이 있음)
@@ -192,14 +200,12 @@ def get_as_dataset(img_size, mode='train'):
         # 가우시안 노이즈 크게 줄임 (칼슘의 고밀도 특성 보존)
         RandGaussianNoise(prob=0.3, std=0.01),
         ct_normalization,
-        # Resize((img_size/2, img_size, img_size), mode='trilinear'),
-        Resize((img_size/5, img_size, img_size), mode='trilinear'),
+        Resize(img_size, mode='trilinear'),
     ])
     
     test_transform = Compose([
         ct_normalization,
-        # Resize((img_size/2, img_size, img_size), mode='trilinear')
-        Resize((img_size/5, img_size, img_size), mode='trilinear')
+        Resize(img_size, mode='trilinear')
     ])
     
     if mode == 'train':
