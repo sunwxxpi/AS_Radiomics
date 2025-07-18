@@ -1,8 +1,34 @@
 import os
 import torch
-from monai.transforms import Compose
+import numpy as np
+import nibabel as nib
+from monai.transforms import Compose, Resize
 from trainer.dl_cls_model import CustomModel, nnUNetClassificationModel
-from trainer.dl_cls_dataset import ASDataset, CTNormalization
+
+
+class CTNormalization:
+    """CT 이미지 정규화를 위한 클래스"""
+    
+    def __init__(self, mean_intensity=None, std_intensity=None, lower_bound=None, upper_bound=None, target_dtype=np.float32):
+        self.mean_intensity = mean_intensity
+        self.std_intensity = std_intensity
+        self.lower_bound = lower_bound
+        self.upper_bound = upper_bound
+        self.target_dtype = target_dtype
+    
+    def run(self, image: np.ndarray) -> np.ndarray:
+        assert all(v is not None for v in [self.mean_intensity, self.std_intensity, self.lower_bound, self.upper_bound]), \
+            "CTNormalization requires all intensity parameters: mean_intensity, std_intensity, lower_bound, upper_bound"
+        
+        image = image.astype(self.target_dtype, copy=False)
+        np.clip(image, self.lower_bound, self.upper_bound, out=image)
+        image -= self.mean_intensity
+        image /= max(self.std_intensity, 1e-8)
+        return image
+    
+    def __call__(self, data):
+        """MONAI transform 호환을 위한 호출 메서드"""
+        return torch.from_numpy(self.run(data.numpy()))
 
 
 class DLEmbeddingExtractor:
@@ -17,7 +43,7 @@ class DLEmbeddingExtractor:
         self.full_model = None
         self.embedding_dim = None
         
-        # dl_cls_dataset.py와 동일한 전처리 파이프라인 설정
+        # CT 정규화 설정
         self.ct_normalization = CTNormalization(
             mean_intensity=363.5522766113281,
             std_intensity=249.69992065429688,
@@ -25,14 +51,39 @@ class DLEmbeddingExtractor:
             upper_bound=1298.0
         )
         
-        # dl_cls_dataset.py와 동일한 transform 설정 (Config의 img_size 사용)
-        from monai.transforms import Resize
+        # 전처리 파이프라인 설정
         self.transform = Compose([
             self.ct_normalization,
             Resize(self.img_size, mode='trilinear')
         ])
         
         self._load_model()
+    
+    def _load_image(self, image_path):
+        """NIfTI 이미지 로딩 및 전처리"""
+        try:
+            # NIfTI 파일 로드
+            nii_img = nib.load(image_path)
+            img_data = nii_img.get_fdata().astype(np.float32)
+            
+            # NIfTI 기본 순서 (W, H, D)를 PyTorch 표준 (D, H, W)로 transpose
+            img_data = np.transpose(img_data, (2, 1, 0))  # (W, H, D) -> (D, H, W)
+            
+            # 채널 차원 추가 (D, H, W) -> (1, D, H, W)
+            if len(img_data.shape) == 3:
+                img_data = img_data[np.newaxis, ...]  # 첫 번째 차원에 채널 추가
+            
+            # torch tensor로 변환
+            img_tensor = torch.from_numpy(img_data)
+            
+            # 전처리 적용
+            if self.transform is not None:
+                img_tensor = self.transform(img_tensor)
+            
+            return img_tensor
+            
+        except Exception as e:
+            raise RuntimeError(f"이미지 로딩 실패: {e}")
     
     def _load_model(self):
         """모델 로드 및 키 매핑 처리"""
@@ -124,18 +175,8 @@ class DLEmbeddingExtractor:
     def extract_features_for_case(self, image_path, case_id):
         """단일 케이스에 대한 DL embedding 특징 추출"""
         try:
-            # ASDataset의 __getitem__ 로직을 재사용하기 위해 임시 dataset 생성
-            # 단일 파일과 더미 레이블로 dataset 생성
-            temp_dataset = ASDataset(
-                image_files=[image_path],
-                labels=['dummy'],  # 더미 레이블 (실제로는 사용하지 않음)
-                label_to_idx={'dummy': 0},
-                transform=self.transform
-            )
-            
-            # 첫 번째(유일한) 샘플 가져오기
-            sample = temp_dataset[0]
-            img_tensor = sample['imgs']  # 이미 전처리된 tensor
+            # 이미지 로딩 및 전처리
+            img_tensor = self._load_image(image_path)
             
             # 배치 차원 추가 및 device로 이동
             img_tensor = img_tensor.unsqueeze(0).to(self.device)
