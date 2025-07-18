@@ -19,11 +19,14 @@ class Config:
     CLASSIFICATION_MODE = 'multi'  # 기본값은 multi 분류
     
     # DL Embedding 특징 설정
-    ENABLE_DL_EMBEDDING = True   # DL embedding 특징 사용 여부
-    DL_MODEL_TYPE = 'custom'     # 'custom' 또는 'nnunet'
-    DL_IMG_SIZE = 320            # DL 모델 입력 이미지 크기
-    DL_COMMENT_WRITER = 'Default'
-    FOLD = None                  # None이면 1~5 모든 fold 사용, 숫자면 해당 fold만 사용
+    ENABLE_DL_EMBEDDING = True          # DL embedding 특징 사용 여부
+
+    DL_MODEL_TYPE = 'custom'            # 'custom' 또는 'nnunet'
+    DL_IMG_SIZE = (56, 448, 448)        # DL 모델 입력 이미지 크기 (D, H, W) / Med3D : (56, 448, 448), nnUNet : (32, 384, 320)
+    IMG_SIZE_DEPTH, IMG_SIZE_HEIGHT, IMG_SIZE_WIDTH = DL_IMG_SIZE
+    DL_COMMENT_WRITER = f'{DL_MODEL_TYPE}_{IMG_SIZE_DEPTH}_{IMG_SIZE_HEIGHT}_{IMG_SIZE_WIDTH}'
+    FOLD = None                         # None이면 1~5 모든 fold 사용, 숫자면 해당 fold만 사용
+
     DL_MODEL_PATH = f'./3D-DL-Classification/weights/{DL_COMMENT_WRITER}/{FOLD}/best_model.pth'
     
     # nnUNet 관련 설정 (DL_MODEL_TYPE이 'nnunet'인 경우)

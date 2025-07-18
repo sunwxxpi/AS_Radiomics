@@ -8,7 +8,7 @@ from trainer.dl_cls_dataset import ASDataset, CTNormalization
 class DLEmbeddingExtractor:
     """Deep Learning 모델에서 embedding feature를 추출하는 클래스"""
     
-    def __init__(self, model_path, model_type='custom', nnunet_config=None, img_size=224, device=None):
+    def __init__(self, model_path, model_type='custom', nnunet_config=None, img_size=None, device=None):
         self.model_path = model_path
         self.model_type = model_type
         self.nnunet_config = nnunet_config
@@ -29,7 +29,7 @@ class DLEmbeddingExtractor:
         from monai.transforms import Resize
         self.transform = Compose([
             self.ct_normalization,
-            Resize((self.img_size//5, self.img_size, self.img_size), mode='trilinear')
+            Resize(self.img_size, mode='trilinear')
         ])
         
         self._load_model()
