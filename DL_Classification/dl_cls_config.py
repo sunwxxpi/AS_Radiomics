@@ -53,7 +53,6 @@ def load_config():
     parser.add_argument('--fold', type=int, default=5)
     parser.add_argument('--epochs', type=int, default=150)
     parser.add_argument('--log_step', type=int, default=1)
-    parser.add_argument('--lr', type=float, default=5e-6)
 
     # MODEL TYPE SELECTION
     parser.add_argument('--model_type', type=str, default='custom', choices=['custom', 'nnunet'], 
@@ -67,10 +66,17 @@ def load_config():
     parser.add_argument('--nnunet_checkpoint', type=str, 
                        default='./3D-DL-Classification/nnUNet/checkpoint_final.pth')
     parser.add_argument('--nnunet_configuration', type=str, default='3d_fullres')
-
+    
+    # LEARNING RATE PARAMETERS
     parser.add_argument('--loss_function', type=str, default='CE')
     parser.add_argument('--optimizer', type=str, default='AdamW', choices=['SGD', 'Adam', 'AdamW'])
     parser.add_argument('--scheduler', type=str, default='cosine', choices=['cosine', 'step'])
+    parser.add_argument('--lr', type=float, default=5e-5)
+    
+    parser.add_argument('--head_warmup_lr', type=float, default=1e-7)
+    parser.add_argument('--head_warmup_epochs', type=int, default=5)
+    parser.add_argument('--backbone_lr_ratio', type=float, default=0.1)
+    
     parser.add_argument('--warmup_epochs', type=int, default=10)
     parser.add_argument('--warmup_decay', type=float, default=0.01)
     parser.add_argument('--min_lr', type=float, default=1e-8)
