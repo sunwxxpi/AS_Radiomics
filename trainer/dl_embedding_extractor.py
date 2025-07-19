@@ -1,9 +1,12 @@
 import os
+import sys
 import torch
 import numpy as np
 import nibabel as nib
 from monai.transforms import Compose, Resize
-from trainer.dl_cls_model import CustomModel, nnUNetClassificationModel
+
+sys.path.append('/home/psw/AS_Radiomics')
+from DL_Classification.dl_cls_model import CustomModel, nnUNetClassificationModel
 
 
 class CTNormalization:
