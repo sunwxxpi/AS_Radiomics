@@ -42,7 +42,7 @@ def generate_writer_comment(model_type, img_size):
 
 def load_config():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_path', type=str, default='./3D-DL-Classification/weights')
+    parser.add_argument('--model_path', type=str, default='./DL_Classification/weights')
     parser.add_argument('--writer_comment', type=str, default=None)
     parser.add_argument('--save_model', type=bool, default=True)
 
@@ -60,11 +60,11 @@ def load_config():
 
     # nnUNet SPECIFIC PARAMETERS
     parser.add_argument('--nnunet_plans_file', type=str, 
-                       default='./3D-DL-Classification/nnUNet/nnUNetResEncUNetLPlans.json')
+                       default='./DL_Classification/nnUNet/nnUNetResEncUNetLPlans.json')
     parser.add_argument('--nnunet_dataset_json', type=str, 
-                       default='./3D-DL-Classification/nnUNet/dataset.json')
+                       default='./DL_Classification/nnUNet/dataset.json')
     parser.add_argument('--nnunet_checkpoint', type=str, 
-                       default='./3D-DL-Classification/nnUNet/checkpoint_final.pth')
+                       default='./DL_Classification/nnUNet/checkpoint_final.pth')
     parser.add_argument('--nnunet_configuration', type=str, default='3d_fullres')
     
     # LEARNING RATE PARAMETERS

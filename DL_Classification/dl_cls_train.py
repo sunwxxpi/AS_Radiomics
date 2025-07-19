@@ -225,7 +225,7 @@ def train(config, train_loader, val_loader, fold):
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1, weight=weight).to(device) if config.loss_function == 'CE' else None
 
     # TensorBoard WRITER
-    writer = SummaryWriter(log_dir=f'./3D-DL-Classification/logs/{args.writer_comment}/{str(fold)}')
+    writer = SummaryWriter(log_dir=f'./DL_Classification/logs/{args.writer_comment}/{str(fold)}')
 
     ckpt_path = os.path.join(config.model_path)
     model_save_path = os.path.join(ckpt_path, args.writer_comment, str(fold))

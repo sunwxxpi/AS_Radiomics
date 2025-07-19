@@ -61,7 +61,7 @@ def evaluate_single_fold(labels, probs, class_names, config, fold_number):
     print(class_report)
 
     # Confusion matrix 저장 경로
-    output_path = os.path.join('./3D-DL-Classification', './results', config.writer_comment)
+    output_path = os.path.join('./DL_Classification', './results', config.writer_comment)
     conf_matrix_plot_path = os.path.join(output_path, 'conf_matrix', f'fold_{fold_number}.png')
 
     # Confusion matrix 그리기
@@ -96,7 +96,7 @@ def evaluate_ensemble(all_labels, all_probs, class_names, config):
         print(class_report)
 
         # Confusion matrix 저장 경로
-        output_path = os.path.join('./3D-DL-Classification', './results', config.writer_comment)
+        output_path = os.path.join('./DL_Classification', './results', config.writer_comment)
         conf_matrix_plot_path = os.path.join(output_path, 'conf_matrix', f'ensemble_{voting_type.lower().replace(" ", "_")}.png')
 
         # Confusion matrix 그리기
