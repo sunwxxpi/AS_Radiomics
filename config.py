@@ -27,13 +27,13 @@ class Config:
     DL_COMMENT_WRITER = f'{DL_MODEL_TYPE}_{IMG_SIZE_DEPTH}_{IMG_SIZE_HEIGHT}_{IMG_SIZE_WIDTH}'
     FOLD = None                         # None이면 1~5 모든 fold 사용, 숫자면 해당 fold만 사용
 
-    DL_MODEL_PATH = f'./3D-DL-Classification/weights/{DL_COMMENT_WRITER}/{FOLD}/best_model.pth'
+    DL_MODEL_PATH = f'./DL_Classification/weights/{DL_COMMENT_WRITER}/{FOLD}/best_model.pth'
     
     # nnUNet 관련 설정 (DL_MODEL_TYPE이 'nnunet'인 경우)
     DL_NNUNET_CONFIG = {
-        'plans_file': './3D-DL-Classification/nnUNet/nnUNetResEncUNetLPlans.json',
-        'dataset_json_file': './3D-DL-Classification/nnUNet/dataset.json',
-        'checkpoint_file': './3D-DL-Classification/nnUNet/checkpoint_final.pth',
+        'plans_file': './DL_Classification/nnUNet/nnUNetResEncUNetLPlans.json',
+        'dataset_json_file': './DL_Classification/nnUNet/dataset.json',
+        'checkpoint_file': './DL_Classification/nnUNet/checkpoint_final.pth',
         'configuration': '3d_fullres'
     }
     
@@ -51,13 +51,13 @@ class Config:
         if cls.FOLD is None:
             # 모든 fold (1~5) 사용
             return {
-                fold: f'./3D-DL-Classification/weights/{cls.DL_COMMENT_WRITER}/{fold}/best_model.pth'
+                fold: f'./DL_Classification/weights/{cls.DL_COMMENT_WRITER}/{fold}/best_model.pth'
                 for fold in range(1, 6)
             }
         else:
             # 특정 fold만 사용
             return {
-                cls.FOLD: f'./3D-DL-Classification/weights/{cls.DL_COMMENT_WRITER}/{cls.FOLD}/best_model.pth'
+                cls.FOLD: f'./DL_Classification/weights/{cls.DL_COMMENT_WRITER}/{cls.FOLD}/best_model.pth'
             }
 
     # 모델 하이퍼파라미터
