@@ -47,7 +47,7 @@ def load_config():
     parser.add_argument('--save_model', type=bool, default=True)
 
     # MODEL PARAMETER
-    parser.add_argument('--img_size', type=str, default='(56, 448, 448)') # Med3D : (56, 448, 448), nnUNet : (32, 384, 320)
+    parser.add_argument('--img_size', type=str, default='(32, 384, 320)') # nnUNet : (32, 384, 320), Med3D : (56, 448, 448)
     parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--class_num', type=int, default=3)
     parser.add_argument('--fold', type=int, default=5)
@@ -55,7 +55,7 @@ def load_config():
     parser.add_argument('--log_step', type=int, default=1)
 
     # MODEL TYPE SELECTION
-    parser.add_argument('--model_type', type=str, default='custom', choices=['custom', 'nnunet'], 
+    parser.add_argument('--model_type', type=str, default='nnunet', choices=['custom', 'nnunet'], 
                        help='Model type: custom (MONAI ResNet50) or nnunet (nnUNet encoder)')
 
     # nnUNet SPECIFIC PARAMETERS
@@ -74,8 +74,8 @@ def load_config():
     parser.add_argument('--lr', type=float, default=5e-5)
     
     parser.add_argument('--head_warmup_lr', type=float, default=1e-7)
-    parser.add_argument('--head_warmup_epochs', type=int, default=5)
-    parser.add_argument('--backbone_lr_ratio', type=float, default=0.1)
+    parser.add_argument('--head_warmup_epochs', type=int, default=0)
+    parser.add_argument('--backbone_lr_ratio', type=float, default=1.0)
     
     parser.add_argument('--warmup_epochs', type=int, default=10)
     parser.add_argument('--warmup_decay', type=float, default=0.01)
