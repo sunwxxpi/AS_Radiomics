@@ -97,7 +97,7 @@ class FileHandler:
                 'AUC': res.get('AUC', float('nan')),
                 'AP': res.get('AP', float('nan'))
             } for model_name, res in results.items() if isinstance(res, dict)
-        }).T.sort_values(by='AUC', ascending=False)
+        }).T.sort_index()
         
         results_summary_df.index.name = 'Model'
         
