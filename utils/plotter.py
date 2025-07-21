@@ -51,7 +51,7 @@ class ResultPlotter:
         
         # Confusion Matrix
         if 'Confusion Matrix' in metrics and metrics['Confusion Matrix'].size > 0:
-            self._plot_confusion_matrix(feature_selection_method, model_name, metrics['Confusion Matrix'])
+            self._plot_confusion_matrix(feature_selection_method, model_name, metrics['Confusion Matrix'], metrics)
     
     def _plot_roc_curve(self, feature_selection_method, model_name, predictions, auc_score, proba_severe):
         """ROC 곡선 플롯"""
@@ -181,39 +181,38 @@ class ResultPlotter:
         except Exception as e:
             print(f"      다중 클래스 PR 곡선 생성 오류 ({model_name}): {e}")
     
-    def _plot_confusion_matrix(self, feature_selection_method, model_name, conf_matrix):
-        """혼동 행렬 플롯"""
+    def _plot_confusion_matrix(self, feature_selection_method, model_name, conf_matrix, metrics):
+        """혼동 행렬 플롯 (정규화 비율과 원본 개수를 함께 표시)"""
         try:
             target_names = self.label_encoder.classes_
             
-            # 원본 혼동 행렬
-            plt.figure(figsize=(8, 6))
-            sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues',
-                       xticklabels=target_names, yticklabels=target_names,
-                       annot_kws={"size": 18})
-            plt.title(f'Confusion Matrix (Raw Counts) - {feature_selection_method}_{model_name}', fontsize=16)
-            plt.xlabel('Predicted Label', fontsize=14)
-            plt.ylabel('True Label', fontsize=14)
-            plt.tight_layout()
-            
-            filename = os.path.join(self.output_dir, f'{model_name}_CM_raw.png')
-            plt.savefig(filename)
-            plt.close()
-            
-            # 정규화된 혼동 행렬
+            # 정규화된 혼동 행렬 계산
             conf_matrix_normalized = conf_matrix.astype('float') / conf_matrix.sum(axis=1)[:, np.newaxis]
             
-            plt.figure(figsize=(8, 6))
-            sns.heatmap(conf_matrix_normalized, annot=True, fmt='.2f', cmap='Blues',
+            # 각 셀에 표시할 텍스트 생성 (비율과 개수 함께)
+            combined_text = np.empty_like(conf_matrix, dtype=object)
+            for i in range(conf_matrix.shape[0]):
+                for j in range(conf_matrix.shape[1]):
+                    combined_text[i, j] = f'{conf_matrix_normalized[i, j]:.3f}\n({conf_matrix[i, j]})'
+            
+            # 성능 지표 문자열 생성
+            metrics_text = f"Accuracy: {metrics.get('Accuracy', 0):.4f} | F1-Score: {metrics.get('F1', 0):.4f} | AUC: {metrics.get('AUC', 0):.4f} | AP: {metrics.get('AP', 0):.4f}"
+            
+            plt.figure(figsize=(10, 10))
+            sns.heatmap(conf_matrix_normalized, annot=combined_text, fmt='',
                        xticklabels=target_names, yticklabels=target_names,
-                       annot_kws={"size": 18}, vmin=0.0, vmax=1.0)
-            plt.title(f'Confusion Matrix (Normalized) - {feature_selection_method}_{model_name}', fontsize=16)
-            plt.xlabel('Predicted Label', fontsize=14)
-            plt.ylabel('True Label', fontsize=14)
+                       cmap='Blues', annot_kws={"size": 20}, vmin=0.0, vmax=1.0,
+                       cbar=False, square=True)
+            plt.title(f'Confusion Matrix - {feature_selection_method}_{model_name}\n\n{metrics_text}\n(Values: Normalized Ratio (Raw Count))', 
+                     fontsize=20, pad=20)
+            plt.xlabel('Predicted Label', fontsize=18)
+            plt.ylabel('True Label', fontsize=18)
+            plt.xticks(fontsize=16)
+            plt.yticks(fontsize=16)
             plt.tight_layout()
             
-            filename = os.path.join(self.output_dir, f'{model_name}_CM_normalized.png')
-            plt.savefig(filename)
+            filename = os.path.join(self.output_dir, f'{model_name}_confusion_matrix.png')
+            plt.savefig(filename, dpi=200)
             plt.close()
             
         except Exception as e:

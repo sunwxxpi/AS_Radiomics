@@ -7,21 +7,40 @@ import seaborn as sns
 import dl_cls_dataset
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, classification_report
+from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, classification_report, roc_auc_score, average_precision_score
 from dl_cls_model import CustomModel, nnUNetClassificationModel
 from dl_cls_config import load_config
 
 
-def plot_confusion_matrix(conf_matrix, class_names, accuracy, f1, output_path):
+def plot_confusion_matrix(conf_matrix_raw, class_names, accuracy, f1, auc_score, ap_score, output_path):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(conf_matrix, annot=True, fmt='.2f', cmap='Blues', xticklabels=class_names, yticklabels=class_names)
-    plt.xlabel('Predicted')
-    plt.ylabel('True')
-    plt.title(f'Normalized Confusion Matrix\nAccuracy: {accuracy:.4f}\nF1 Score: {f1:.4f}')
+    # 정규화된 혼동 행렬 계산
+    conf_matrix_normalized = conf_matrix_raw.astype('float') / conf_matrix_raw.sum(axis=1)[:, np.newaxis]
     
-    plt.savefig(output_path)
+    # 각 셀에 표시할 텍스트 생성 (비율과 개수 함께)
+    combined_text = np.empty_like(conf_matrix_raw, dtype=object)
+    for i in range(conf_matrix_raw.shape[0]):
+        for j in range(conf_matrix_raw.shape[1]):
+            combined_text[i, j] = f'{conf_matrix_normalized[i, j]:.3f}\n({conf_matrix_raw[i, j]})'
+    
+    # 성능 지표 문자열 생성
+    metrics_text = f"Accuracy: {accuracy:.4f} | F1-Score: {f1:.4f} | AUC: {auc_score:.4f} | AP: {ap_score:.4f}"
+    
+    plt.figure(figsize=(10, 10))
+    sns.heatmap(conf_matrix_normalized, annot=combined_text, fmt='',
+               xticklabels=class_names, yticklabels=class_names,
+               cmap='Blues', annot_kws={"size": 20}, vmin=0.0, vmax=1.0,
+               cbar=False, square=True)
+    plt.title(f'Confusion Matrix\n\n{metrics_text}\n(Values: Normalized Ratio (Raw Count))', 
+             fontsize=20, pad=20)
+    plt.xlabel('Predicted Label', fontsize=18)
+    plt.ylabel('True Label', fontsize=18)
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
+    plt.tight_layout()
+    
+    plt.savefig(output_path, dpi=200)
     plt.close()
 
 
@@ -52,12 +71,36 @@ def evaluate_single_fold(labels, probs, class_names, config, fold_number):
     accuracy = accuracy_score(labels, preds)
     f1 = f1_score(labels, preds, average='macro')
     
+    # AUC 계산
+    try:
+        if len(class_names) == 2:
+            # 이진 분류인 경우
+            auc = roc_auc_score(labels, probs[:, 1])
+        else:
+            # 다중 분류인 경우 (macro-average)
+            auc = roc_auc_score(labels, probs, multi_class='ovr', average='macro')
+    except ValueError:
+        auc = 0.0
+    
+    # AP 계산
+    try:
+        if len(class_names) == 2:
+            # 이진 분류인 경우
+            ap = average_precision_score(labels, probs[:, 1])
+        else:
+            # 다중 분류인 경우 (macro-average)
+            ap = average_precision_score(labels, probs, average='macro')
+    except ValueError:
+        ap = 0.0
+    
     class_report = classification_report(labels, preds, target_names=class_names)
-    conf_matrix = confusion_matrix(labels, preds, normalize='true')
+    conf_matrix = confusion_matrix(labels, preds, normalize=None)  # 원본 개수
 
     print(f'Fold {fold_number} Results')
     print(f'Accuracy: {accuracy:.4f}')
     print(f'F1 Score: {f1:.4f}')
+    print(f'AUC: {auc:.4f}')
+    print(f'AP: {ap:.4f}')
     print(class_report)
 
     # Confusion matrix 저장 경로
@@ -65,7 +108,7 @@ def evaluate_single_fold(labels, probs, class_names, config, fold_number):
     conf_matrix_plot_path = os.path.join(output_path, 'conf_matrix', f'fold_{fold_number}.png')
 
     # Confusion matrix 그리기
-    plot_confusion_matrix(conf_matrix, class_names, accuracy, f1, conf_matrix_plot_path)
+    plot_confusion_matrix(conf_matrix, class_names, accuracy, f1, auc, ap, conf_matrix_plot_path)
 
 
 def evaluate_ensemble(all_labels, all_probs, class_names, config):
@@ -87,12 +130,54 @@ def evaluate_ensemble(all_labels, all_probs, class_names, config):
     for voting_type, ensemble_preds in [('Soft Voting', ensemble_preds_soft), ('Hard Voting', ensemble_preds_hard)]:
         accuracy = accuracy_score(all_labels, ensemble_preds)
         f1 = f1_score(all_labels, ensemble_preds, average='macro')
+        
+        # AUC 계산
+        try:
+            if len(class_names) == 2:
+                # 이진 분류인 경우
+                if voting_type == 'Soft Voting':
+                    auc = roc_auc_score(all_labels, ensemble_probs[:, 1])
+                else:
+                    # Hard voting의 경우 예측된 클래스만 있으므로 AUC 계산이 어려움
+                    # 대신 soft voting의 확률을 사용
+                    auc = roc_auc_score(all_labels, ensemble_probs[:, 1])
+            else:
+                # 다중 분류인 경우
+                if voting_type == 'Soft Voting':
+                    auc = roc_auc_score(all_labels, ensemble_probs, multi_class='ovr', average='macro')
+                else:
+                    # Hard voting의 경우 soft voting의 확률을 사용
+                    auc = roc_auc_score(all_labels, ensemble_probs, multi_class='ovr', average='macro')
+        except ValueError:
+            auc = 0.0
+        
+        # AP 계산
+        try:
+            if len(class_names) == 2:
+                # 이진 분류인 경우
+                if voting_type == 'Soft Voting':
+                    ap = average_precision_score(all_labels, ensemble_probs[:, 1])
+                else:
+                    # Hard voting의 경우 soft voting의 확률을 사용
+                    ap = average_precision_score(all_labels, ensemble_probs[:, 1])
+            else:
+                # 다중 분류인 경우
+                if voting_type == 'Soft Voting':
+                    ap = average_precision_score(all_labels, ensemble_probs, average='macro')
+                else:
+                    # Hard voting의 경우 soft voting의 확률을 사용
+                    ap = average_precision_score(all_labels, ensemble_probs, average='macro')
+        except ValueError:
+            ap = 0.0
+            
         class_report = classification_report(all_labels, ensemble_preds, target_names=class_names)
-        conf_matrix = confusion_matrix(all_labels, ensemble_preds, normalize='true')
+        conf_matrix = confusion_matrix(all_labels, ensemble_preds, normalize=None)  # 원본 개수
 
         print(f'{voting_type} Results')
         print(f'Accuracy: {accuracy:.4f}')
         print(f'F1 Score: {f1:.4f}')
+        print(f'AUC: {auc:.4f}')
+        print(f'AP: {ap:.4f}')
         print(class_report)
 
         # Confusion matrix 저장 경로
@@ -100,7 +185,7 @@ def evaluate_ensemble(all_labels, all_probs, class_names, config):
         conf_matrix_plot_path = os.path.join(output_path, 'conf_matrix', f'ensemble_{voting_type.lower().replace(" ", "_")}.png')
 
         # Confusion matrix 그리기
-        plot_confusion_matrix(conf_matrix, class_names, accuracy, f1, conf_matrix_plot_path)
+        plot_confusion_matrix(conf_matrix, class_names, accuracy, f1, auc, ap, conf_matrix_plot_path)
 
 
 def main():
