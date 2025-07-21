@@ -57,11 +57,11 @@ def load_config():
 
     # nnUNet SPECIFIC PARAMETERS
     parser.add_argument('--nnunet_plans_file', type=str, 
-                       default='./DL_Classification/nnUNet/nnUNetResEncUNetLPlans.json')
+                       default='./DL_Classification/nnUNet/Dataset001_COCA/nnUNetResEncUNetLPlans.json')
     parser.add_argument('--nnunet_dataset_json', type=str, 
-                       default='./DL_Classification/nnUNet/dataset.json')
+                       default='./DL_Classification/nnUNet/Dataset001_COCA/dataset.json')
     parser.add_argument('--nnunet_checkpoint', type=str, 
-                       default='./DL_Classification/nnUNet/checkpoint_final.pth')
+                       default='./DL_Classification/nnUNet/Dataset001_COCA/checkpoint_final.pth')
     parser.add_argument('--nnunet_configuration', type=str, default='3d_fullres')
     
     # LEARNING RATE PARAMETERS
