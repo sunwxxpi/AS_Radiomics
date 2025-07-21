@@ -155,10 +155,12 @@ def run_fold_analysis(features_df, fold_name, mode, base_output_dir):
     
     데이터 분할 → 전처리 → 모델 학습 → 평가 → 시각화 → 결과 저장
     """
-    print(f"\n  === {fold_name if fold_name else 'Radiomics Only'} 분석 실행 ===")
+    fold_name = fold_name if fold_name else 'Radiomics_Only'
     
-    # fold별 독립 출력 디렉토리 생성 (fold_name이 None이면 base_output_dir 사용)
-    if fold_name is not None:
+    print(f"\n  === {fold_name} 분석 실행 ===")
+    
+    # fold별 독립 출력 디렉토리 생성 (fold_name이 'Radiomics_Only'이면 base_output_dir 사용)
+    if fold_name != 'Radiomics_Only':
         fold_output_dir = os.path.join(base_output_dir, f"fold_{fold_name}")
         os.makedirs(fold_output_dir, exist_ok=True)
     else:
