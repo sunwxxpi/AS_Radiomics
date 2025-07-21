@@ -37,6 +37,17 @@ def generate_writer_comment(model_type, img_size):
         return f"{model_type}_{depth}_{height}_{width}"
 
 
+def setup_nnunet_paths(nnunet_config):
+    """nnunet_config를 기반으로 nnUNet 관련 경로들을 자동 설정"""
+    base_path = f'./DL_Classification/nnUNet/{nnunet_config}'
+    
+    return {
+        'plans_file': f'{base_path}/nnUNetResEncUNetLPlans.json',
+        'dataset_json': f'{base_path}/dataset.json',
+        'checkpoint': f'{base_path}/checkpoint_final.pth'
+    }
+
+
 def load_config():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_path', type=str, default='./DL_Classification/weights')
@@ -56,12 +67,10 @@ def load_config():
                        help='Model type: custom (MONAI ResNet50) or nnunet (nnUNet encoder)')
 
     # nnUNet SPECIFIC PARAMETERS
-    parser.add_argument('--nnunet_plans_file', type=str, 
-                       default='./DL_Classification/nnUNet/Dataset001_COCA/nnUNetResEncUNetLPlans.json')
-    parser.add_argument('--nnunet_dataset_json', type=str, 
-                       default='./DL_Classification/nnUNet/Dataset001_COCA/dataset.json')
-    parser.add_argument('--nnunet_checkpoint', type=str, 
-                       default='./DL_Classification/nnUNet/Dataset001_COCA/checkpoint_final.pth')
+    parser.add_argument('--nnunet_config', type=str, default='Dataset001_COCA')
+    parser.add_argument('--nnunet_plans_file', type=str, default=None)
+    parser.add_argument('--nnunet_dataset_json', type=str, default=None)
+    parser.add_argument('--nnunet_checkpoint', type=str, default=None)
     parser.add_argument('--nnunet_configuration', type=str, default='3d_fullres')
     
     # LEARNING RATE PARAMETERS
@@ -84,6 +93,18 @@ def load_config():
     config = parser.parse_args()
     
     config.img_size = parse_img_size(config.img_size)
+    
+    # nnUNet 경로 자동 설정
+    if config.model_type == 'nnunet':
+        nnunet_paths = setup_nnunet_paths(config.nnunet_config)
+        
+        # 사용자가 직접 지정하지 않은 경우만 자동 설정
+        if config.nnunet_plans_file is None:
+            config.nnunet_plans_file = nnunet_paths['plans_file']
+        if config.nnunet_dataset_json is None:
+            config.nnunet_dataset_json = nnunet_paths['dataset_json']
+        if config.nnunet_checkpoint is None:
+            config.nnunet_checkpoint = nnunet_paths['checkpoint']
     
     if config.writer_comment is None:
         config.writer_comment = generate_writer_comment(config.model_type, config.img_size)

@@ -1,3 +1,4 @@
+import os
 import json
 import torch
 import torch.nn as nn
@@ -99,7 +100,7 @@ class nnUNetClassificationModel(nn.Module):
         self.classifier = nn.Linear(feature_dim, class_num)
     
     def _load_pretrained_backbone(self, encoder_config):
-        """Load pretrained nnUNet backbone"""
+        """Load nnUNet backbone (with or without pretrained weights)"""
         plans_file = encoder_config.get('plans_file')
         dataset_json_file = encoder_config.get('dataset_json_file')
         checkpoint_file = encoder_config.get('checkpoint_file')
@@ -125,19 +126,29 @@ class nnUNetClassificationModel(nn.Module):
             deep_supervision=True
         )
 
-        # 체크포인트에서 가중치 불러오기
-        print(f"Loading checkpoint from: {checkpoint_file}")
-        checkpoint = torch.load(checkpoint_file, map_location=torch.device('cpu'), weights_only=False)
+        # 체크포인트 파일이 있고 존재하는 경우만 가중치 로드
+        if checkpoint_file and os.path.exists(checkpoint_file):
+            print(f"Loading checkpoint from: {checkpoint_file}")
+            try:
+                checkpoint = torch.load(checkpoint_file, map_location=torch.device('cpu'), weights_only=False)
 
-        # Checkpoint 유효성 검증
-        if 'network_weights' not in checkpoint:
-            raise ValueError("Invalid checkpoint: 'network_weights' key not found")
+                # Checkpoint 유효성 검증
+                if 'network_weights' not in checkpoint:
+                    raise ValueError("Invalid checkpoint: 'network_weights' key not found")
 
-        network_weights = {k.replace('module.', ''): v for k, v in checkpoint['network_weights'].items()}
-        
-        # 가중치 로드
-        model.load_state_dict(network_weights, strict=False)
-        print("✓ Successfully loaded pre-trained nnU-Net model!")
+                network_weights = {k.replace('module.', ''): v for k, v in checkpoint['network_weights'].items()}
+                
+                # 가중치 로드
+                model.load_state_dict(network_weights, strict=False)
+                print("✓ Successfully loaded pre-trained nnU-Net model!")
+                
+            except Exception as e:
+                print(f"⚠️ Warning: Failed to load checkpoint ({e}). Using randomly initialized weights.")
+        else:
+            if checkpoint_file:
+                print(f"⚠️ Warning: Checkpoint file not found at {checkpoint_file}. Using randomly initialized weights.")
+            else:
+                print("⚠️ No checkpoint file specified. Using randomly initialized nnU-Net architecture.")
         
         # Encoder 추출
         encoder = nnUNetEncoder(model)
