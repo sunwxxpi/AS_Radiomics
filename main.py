@@ -137,7 +137,7 @@ def run_pipeline(mode):
                     print(severity_distribution)
                 print(f"총 데이터 케이스 수: {len(radiomics_only_df)}")
             
-            run_fold_analysis(radiomics_only_df, "radiomics_only", mode, output_dir)
+            run_fold_analysis(radiomics_only_df, None, mode, output_dir)
         
         print(f"\n{mode} 모드 분석 과정 완료. 결과는 '{output_dir}' 폴더에 저장되었습니다.")
         
@@ -155,11 +155,14 @@ def run_fold_analysis(features_df, fold_name, mode, base_output_dir):
     
     데이터 분할 → 전처리 → 모델 학습 → 평가 → 시각화 → 결과 저장
     """
-    print(f"\n  === {fold_name} 분석 실행 ===")
+    print(f"\n  === {fold_name if fold_name else 'Radiomics Only'} 분석 실행 ===")
     
-    # fold별 독립 출력 디렉토리 생성
-    fold_output_dir = os.path.join(base_output_dir, f"fold_{fold_name}")
-    os.makedirs(fold_output_dir, exist_ok=True)
+    # fold별 독립 출력 디렉토리 생성 (fold_name이 None이면 base_output_dir 사용)
+    if fold_name is not None:
+        fold_output_dir = os.path.join(base_output_dir, f"fold_{fold_name}")
+        os.makedirs(fold_output_dir, exist_ok=True)
+    else:
+        fold_output_dir = base_output_dir
     
     try:
         # case_id를 인덱스로 변환 (전처리 호환성)
