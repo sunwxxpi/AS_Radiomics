@@ -35,9 +35,6 @@ def generate_writer_comment(model_type, img_size):
     if isinstance(img_size, (tuple, list)) and len(img_size) == 3:
         depth, height, width = img_size
         return f"{model_type}_{depth}_{height}_{width}"
-    else:
-        size = img_size if isinstance(img_size, int) else img_size[0]
-        return f"{model_type}_{size}_{size}_{size}"
 
 
 def load_config():
