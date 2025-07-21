@@ -102,12 +102,12 @@ class DLEmbeddingExtractor:
             
             # 모델 타입에 따라 모델 생성
             if self.model_type == 'custom':
-                class_num = checkpoint.get('class_num', 3)
+                class_num = checkpoint.get('class_num')
                 self.full_model = CustomModel(class_num=class_num)
             elif self.model_type == 'nnunet':
                 if self.nnunet_config is None:
                     raise ValueError("nnUNet 모델에는 nnunet_config가 필요합니다.")
-                class_num = checkpoint.get('class_num', 3)
+                class_num = checkpoint.get('class_num')
                 self.full_model = nnUNetClassificationModel(
                     class_num=class_num,
                     pretrained_encoder_path=self.nnunet_config

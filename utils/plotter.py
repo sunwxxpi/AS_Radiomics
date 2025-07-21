@@ -196,7 +196,7 @@ class ResultPlotter:
                     combined_text[i, j] = f'{conf_matrix_normalized[i, j]:.3f}\n({conf_matrix[i, j]})'
             
             # 성능 지표 문자열 생성
-            metrics_text = f"Accuracy: {metrics.get('Accuracy', 0):.4f} | F1-Score: {metrics.get('F1', 0):.4f} | AUC: {metrics.get('AUC', 0):.4f} | AP: {metrics.get('AP', 0):.4f}"
+            metrics_text = f"Accuracy: {metrics.get('Accuracy'):.4f} | F1-Score: {metrics.get('F1'):.4f} | AUC: {metrics.get('AUC'):.4f} | AP: {metrics.get('AP'):.4f}"
             
             plt.figure(figsize=(10, 10))
             sns.heatmap(conf_matrix_normalized, annot=combined_text, fmt='',

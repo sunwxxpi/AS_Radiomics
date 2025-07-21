@@ -100,10 +100,10 @@ class nnUNetClassificationModel(nn.Module):
     
     def _load_pretrained_backbone(self, encoder_config):
         """Load pretrained nnUNet backbone"""
-        plans_file = encoder_config.get('plans_file', './DL_Classification/nnUNet/nnUNetResEncUNetLPlans.json')
-        dataset_json_file = encoder_config.get('dataset_json_file', './DL_Classification/nnUNet/dataset.json')
-        checkpoint_file = encoder_config.get('checkpoint_file', './DL_Classification/nnUNet/checkpoint_final.pth')
-        configuration = encoder_config.get('configuration', '3d_fullres')
+        plans_file = encoder_config.get('plans_file')
+        dataset_json_file = encoder_config.get('dataset_json_file')
+        checkpoint_file = encoder_config.get('checkpoint_file')
+        configuration = encoder_config.get('configuration')
         
         # JSON 파일들 로드
         with open(dataset_json_file, 'r') as f:
