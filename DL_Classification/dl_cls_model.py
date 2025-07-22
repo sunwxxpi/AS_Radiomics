@@ -8,16 +8,14 @@ from nnunetv2.utilities.get_network_from_plans import get_network_from_plans
     
 
 class CustomModel(nn.Module):
-    def __init__(self, class_num=2):
+    def __init__(self, num_classes=2):
         super(CustomModel, self).__init__()
-        
-        self.num_classes = class_num
         
         self.backbone = monai.networks.nets.resnet50(
             pretrained=True,
             spatial_dims=3,
             n_input_channels=1,
-            num_classes=class_num,
+            num_classes=num_classes,
             feed_forward=False,  # FC layer 제외
             shortcut_type='B',
             bias_downsample=False
@@ -27,7 +25,7 @@ class CustomModel(nn.Module):
         self.in_features = self.backbone.in_planes
         
         # Classification head 별도 정의
-        self.classifier = nn.Linear(self.in_features, class_num)
+        self.classifier = nn.Linear(self.in_features, num_classes)
         
     def forward(self, images=None):
         """전체 forward pass (backbone + classifier)"""
@@ -69,9 +67,8 @@ class nnUNetEncoder(nn.Module):
 
 class nnUNetClassificationModel(nn.Module):
     """nnU-Net Encoder + Classification Head"""
-    def __init__(self, class_num=2, pretrained_encoder_path=None):
+    def __init__(self, num_classes=2, pretrained_encoder_path=None):
         super().__init__()
-        self.num_classes = class_num
         
         if pretrained_encoder_path:
             # Load pretrained nnUNet backbone
@@ -86,18 +83,7 @@ class nnUNetClassificationModel(nn.Module):
         else:
             raise ValueError("pretrained_encoder_path is required for nnUNetClassificationModel")
         
-        # Classification head
-        """ self.classifier = nn.Sequential(
-            nn.Dropout(0.5),
-            nn.Linear(feature_dim, 512),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(256, class_num)
-        ) """
-        self.classifier = nn.Linear(feature_dim, class_num)
+        self.classifier = nn.Linear(feature_dim, num_classes)
     
     def _load_pretrained_backbone(self, encoder_config):
         """Load nnUNet backbone (with or without pretrained weights)"""

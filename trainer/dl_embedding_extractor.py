@@ -100,18 +100,17 @@ class DLEmbeddingExtractor:
             # 체크포인트 로드
             checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=False)
             
+            # 체크포인트에서 num_classes 추출
+            num_classes = self._extract_num_classes_from_checkpoint(checkpoint)
+            
             # 모델 타입에 따라 모델 생성
             if self.model_type == 'custom':
-                class_num = checkpoint.get('class_num')
-                self.full_model = CustomModel(class_num=class_num)
+                self.full_model = CustomModel(num_classes=num_classes)
             elif self.model_type == 'nnunet':
                 if self.nnunet_config is None:
                     raise ValueError("nnUNet 모델에는 nnunet_config가 필요합니다.")
-                class_num = checkpoint.get('class_num')
-                self.full_model = nnUNetClassificationModel(
-                    class_num=class_num,
-                    pretrained_encoder_path=self.nnunet_config
-                )
+                
+                self.full_model = nnUNetClassificationModel(num_classes=num_classes, pretrained_encoder_path=self.nnunet_config)
             else:
                 raise ValueError(f"지원하지 않는 모델 타입: {self.model_type}")
             
@@ -127,12 +126,50 @@ class DLEmbeddingExtractor:
             self.full_model.to(self.device)
             self.full_model.eval()
             
-            print(f"    DL 모델 로딩 완료 (Device: {self.device}, Embedding Dim: {self.embedding_dim})")
+            print(f"    DL 모델 로딩 완료 (Device: {self.device}, Classes: {num_classes}, Embedding Dim: {self.embedding_dim})")
             
         except Exception as e:
-            print(f"    오류: DL 모델 로딩 실패 - {e}")
+            print(f"    ⚠️ 오류: DL 모델 로딩 실패 - {e}")
             self.full_model = None
     
+    def _extract_num_classes_from_checkpoint(self, checkpoint):
+        """체크포인트에서 classifier의 구조를 분석하여 num_classes 추출"""
+        state_dict = checkpoint.get('model_state_dict', checkpoint)
+        
+        # Custom 모델의 경우
+        if self.model_type == 'custom':
+            # classifier.weight 또는 fc.weight에서 out_features 추출
+            classifier_keys = [key for key in state_dict.keys() if 'classifier.weight' in key or 'fc.weight' in key]
+            if classifier_keys:
+                classifier_weight = state_dict[classifier_keys[0]]
+                num_classes = classifier_weight.shape[0]  # out_features
+                print(f"    Custom 모델에서 추출된 num_classes: {num_classes}")
+                return num_classes
+            
+            # net.fc.weight 형태의 키도 확인
+            net_fc_keys = [key for key in state_dict.keys() if 'net.fc.weight' in key]
+            if net_fc_keys:
+                fc_weight = state_dict[net_fc_keys[0]]
+                num_classes = fc_weight.shape[0]
+                print(f"    Custom 모델에서 추출된 num_classes (net.fc): {num_classes}")
+                return num_classes
+        
+        # nnUNet 모델의 경우
+        elif self.model_type == 'nnunet':
+            classifier_keys = [key for key in state_dict.keys() if 'classifier' in key and 'weight' in key]
+            if classifier_keys:
+                # 가장 마지막 classifier layer 찾기 (multi-layer classifier의 경우)
+                last_classifier_key = None
+                for key in sorted(classifier_keys):
+                    if 'weight' in key:
+                        last_classifier_key = key
+                
+                if last_classifier_key:
+                    classifier_weight = state_dict[last_classifier_key]
+                    num_classes = classifier_weight.shape[0]
+                    print(f"    nnUNet 모델에서 추출된 num_classes: {num_classes}")
+                    return num_classes
+
     def _map_state_dict_keys(self, state_dict):
         """체크포인트의 키를 현재 모델 구조에 맞게 매핑"""
         mapped_state_dict = {}
