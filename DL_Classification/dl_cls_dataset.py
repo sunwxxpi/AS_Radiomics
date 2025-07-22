@@ -44,6 +44,28 @@ class CTNormalization:
         return torch.from_numpy(self.run(data.numpy()))
 
 
+def load_nifti_image(image_path):
+    """NIfTI 이미지를 로딩하고 PyTorch tensor로 변환하는 공통 함수"""
+    import nibabel as nib
+    nii_img = nib.load(image_path)
+    img_data = nii_img.get_fdata()
+    
+    # numpy array를 torch tensor로 변환하기 위해 float32로 변환
+    img_data = img_data.astype(np.float32)
+    
+    # NIfTI 기본 순서 (W, H, D)를 PyTorch 표준 (D, H, W)로 transpose
+    img_data = np.transpose(img_data, (2, 1, 0))  # (W, H, D) -> (D, H, W)
+    
+    # 채널 차원 추가 (D, H, W) -> (1, D, H, W)
+    if len(img_data.shape) == 3:
+        img_data = img_data[np.newaxis, ...]  # 첫 번째 차원에 채널 추가
+    
+    # torch tensor로 변환
+    img_tensor = torch.from_numpy(img_data)
+    
+    return img_tensor
+
+
 class ASDataset(Dataset):
     """AS Radiomics 데이터를 위한 Dataset 클래스"""
     
@@ -61,23 +83,8 @@ class ASDataset(Dataset):
         image_path = self.image_files[index]
         label = self.encoded_labels[index]
         
-        # MONAI를 사용하여 NIfTI 파일 로드
-        import nibabel as nib
-        nii_img = nib.load(image_path)
-        img_data = nii_img.get_fdata()
-        
-        # numpy array를 torch tensor로 변환하기 위해 float32로 변환
-        img_data = img_data.astype(np.float32)
-        
-        # NIfTI 기본 순서 (W, H, D)를 PyTorch 표준 (D, H, W)로 transpose
-        img_data = np.transpose(img_data, (2, 1, 0))  # (W, H, D) -> (D, H, W)
-        
-        # 채널 차원 추가 (D, H, W) -> (1, D, H, W)
-        if len(img_data.shape) == 3:
-            img_data = img_data[np.newaxis, ...]  # 첫 번째 차원에 채널 추가
-        
-        # torch tensor로 변환
-        img_data = torch.from_numpy(img_data)
+        # 공통 이미지 로딩 함수 사용
+        img_data = load_nifti_image(image_path)
         
         if self.transform is not None:
             img_data = self.transform(img_data)

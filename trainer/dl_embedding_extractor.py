@@ -7,31 +7,7 @@ from monai.transforms import Compose, Resize
 
 sys.path.append('/home/psw/AS_Radiomics')
 from DL_Classification.dl_cls_model import CustomModel, nnUNetClassificationModel
-
-
-class CTNormalization:
-    """CT 이미지 정규화를 위한 클래스"""
-    
-    def __init__(self, mean_intensity=None, std_intensity=None, lower_bound=None, upper_bound=None, target_dtype=np.float32):
-        self.mean_intensity = mean_intensity
-        self.std_intensity = std_intensity
-        self.lower_bound = lower_bound
-        self.upper_bound = upper_bound
-        self.target_dtype = target_dtype
-    
-    def run(self, image: np.ndarray) -> np.ndarray:
-        assert all(v is not None for v in [self.mean_intensity, self.std_intensity, self.lower_bound, self.upper_bound]), \
-            "CTNormalization requires all intensity parameters: mean_intensity, std_intensity, lower_bound, upper_bound"
-        
-        image = image.astype(self.target_dtype, copy=False)
-        np.clip(image, self.lower_bound, self.upper_bound, out=image)
-        image -= self.mean_intensity
-        image /= max(self.std_intensity, 1e-8)
-        return image
-    
-    def __call__(self, data):
-        """MONAI transform 호환을 위한 호출 메서드"""
-        return torch.from_numpy(self.run(data.numpy()))
+from DL_Classification.dl_cls_dataset import CTNormalization, load_nifti_image
 
 
 class DLEmbeddingExtractor:
@@ -63,21 +39,10 @@ class DLEmbeddingExtractor:
         self._load_model()
     
     def _load_image(self, image_path):
-        """NIfTI 이미지 로딩 및 전처리"""
+        """NIfTI 이미지 로딩 및 전처리 - dl_cls_dataset의 공통 함수 재사용"""
         try:
-            # NIfTI 파일 로드
-            nii_img = nib.load(image_path)
-            img_data = nii_img.get_fdata().astype(np.float32)
-            
-            # NIfTI 기본 순서 (W, H, D)를 PyTorch 표준 (D, H, W)로 transpose
-            img_data = np.transpose(img_data, (2, 1, 0))  # (W, H, D) -> (D, H, W)
-            
-            # 채널 차원 추가 (D, H, W) -> (1, D, H, W)
-            if len(img_data.shape) == 3:
-                img_data = img_data[np.newaxis, ...]  # 첫 번째 차원에 채널 추가
-            
-            # torch tensor로 변환
-            img_tensor = torch.from_numpy(img_data)
+            # 공통 이미지 로딩 함수 사용
+            img_tensor = load_nifti_image(image_path)
             
             # 전처리 적용
             if self.transform is not None:
