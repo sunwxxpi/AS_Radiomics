@@ -28,7 +28,6 @@ class CustomModel(nn.Module):
         self.classifier = nn.Linear(self.in_features, num_classes)
         
     def forward(self, images=None):
-        """전체 forward pass (backbone + classifier)"""
         features = self.backbone(images)
         logits = self.classifier(features)
         
@@ -74,12 +73,16 @@ class nnUNetClassificationModel(nn.Module):
             # Load pretrained nnUNet backbone
             self.backbone = self._load_pretrained_backbone(pretrained_encoder_path)
             
-            # Feature dimension 자동 계산
-            with torch.no_grad():
-                dummy_input = torch.randn(1, 1, 64, 64, 64)
-                dummy_output = self.backbone(dummy_input)
-                feature_dim = dummy_output.shape[1]
-                print(f"Detected feature dimension: {feature_dim}")
+            # Feature dimension 직접 추출 (nnUNet encoder의 마지막 stage 출력 채널 수)
+            if hasattr(self.backbone.encoder_module, 'stages'):
+                # 마지막 stage의 출력 채널 수 추출
+                last_stage = self.backbone.encoder_module.stages[-1]
+                
+                if hasattr(last_stage, 'blocks'):
+                    # ResidualBlock의 출력 채널 수
+                    feature_dim = last_stage.blocks[-1].conv2.all_modules[0].out_channels
+            
+            print(f"Extracted feature dimension from nnUNet encoder: {feature_dim}")
         else:
             raise ValueError("pretrained_encoder_path is required for nnUNetClassificationModel")
         
@@ -148,4 +151,5 @@ class nnUNetClassificationModel(nn.Module):
     def forward(self, images=None):
         features = self.backbone(images)
         logits = self.classifier(features)
+        
         return logits
