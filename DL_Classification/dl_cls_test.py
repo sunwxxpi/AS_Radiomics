@@ -52,9 +52,9 @@ def load_model(model_path, config):
             'checkpoint_file': config.nnunet_checkpoint,
             'configuration': config.nnunet_configuration
         }
-        model = nnUNetClassificationModel(class_num=config.class_num, pretrained_encoder_path=encoder_config)
+        model = nnUNetClassificationModel(num_classes=config.num_classes, pretrained_encoder_path=encoder_config)
     else:
-        model = CustomModel(class_num=config.class_num)
+        model = CustomModel(num_classes=config.num_classes)
     
     model.load_state_dict(torch.load(model_path))
     if torch.cuda.device_count() > 1:
@@ -196,8 +196,8 @@ def main():
     print("데이터셋 로딩 중...")
     test_dataset, label_to_idx, idx_to_label, unique_labels = dl_cls_dataset.get_as_dataset(config.img_size, mode='test')
     # 실제 클래스 수로 업데이트
-    config.class_num = len(unique_labels)
-    print(f"AS 데이터셋 로드 완료. 클래스 수: {config.class_num}")
+    config.num_classes = len(unique_labels)
+    print(f"AS 데이터셋 로드 완료. 클래스 수: {config.num_classes}")
     print(f"클래스 매핑: {label_to_idx}")
     
     test_loader = DataLoader(test_dataset, batch_size=config.batch_size, shuffle=False, num_workers=6)

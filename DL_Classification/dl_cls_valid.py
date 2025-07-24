@@ -17,12 +17,12 @@ def confusion_matrix(preds, labels, conf_matrix):
     return conf_matrix
 
 
-def calculate_metrics(cm, class_num):
+def calculate_metrics(cm, num_classes):
     specificity = []
     sensitivity = []
     precision = []
 
-    for i in range(class_num):
+    for i in range(num_classes):
         true_negative = cm.sum() - (cm[i, :].sum() + cm[:, i].sum() - cm[i, i])
         false_positive = cm[:, i].sum() - cm[i, i]
         false_negative = cm[i, :].sum() - cm[i, i]
@@ -32,9 +32,9 @@ def calculate_metrics(cm, class_num):
         sensitivity.append(true_positive / (true_positive + false_negative + 1e-6))
         precision.append(true_positive / (true_positive + false_positive + 1e-6))
 
-    avg_specificity = sum(specificity) / class_num
-    avg_sensitivity = sum(sensitivity) / class_num
-    avg_precision = sum(precision) / class_num
+    avg_specificity = sum(specificity) / num_classes
+    avg_sensitivity = sum(sensitivity) / num_classes
+    avg_precision = sum(precision) / num_classes
     avg_recall = avg_sensitivity
     f1score = (2 * avg_precision * avg_recall) / (avg_precision + avg_recall + 1e-6)
 
@@ -51,7 +51,7 @@ def validate(config, model, val_loader, criterion):
     epoch_loss = 0
     y_true, y_score = [], []
 
-    cm = torch.zeros((config.class_num, config.class_num))
+    cm = torch.zeros((config.num_classes, config.num_classes))
 
     with tqdm(total=len(val_loader), desc="Validation", unit='Batch') as pbar:
         with torch.no_grad():
@@ -78,13 +78,13 @@ def validate(config, model, val_loader, criterion):
 
     # Calculate metrics
     acc = cm.diag().sum() / cm.sum()
-    f1score, avg_specificity, avg_sensitivity, avg_precision = calculate_metrics(cm, config.class_num)
+    f1score, avg_specificity, avg_sensitivity, avg_precision = calculate_metrics(cm, config.num_classes)
 
     # Compute AUC for each class and average
     y_true = np.array(y_true)
     y_score = np.array(y_score)
 
-    if config.class_num > 2:
+    if config.num_classes > 2:
         # For multiclass, y_true should be in shape (n_samples,) and y_score in shape (n_samples, n_classes)
         auc = roc_auc_score(y_true, y_score, multi_class='ovr')
     else:

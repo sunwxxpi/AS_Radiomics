@@ -145,7 +145,7 @@ def train_phase(config, model, train_loader, val_loader, criterion, optimizer, l
     for epoch in range(start_epoch, end_epoch + 1):
         model.train()
         epoch_loss = 0
-        cm = torch.zeros((config.class_num, config.class_num))
+        cm = torch.zeros((config.num_classes, config.num_classes))
 
         with tqdm(total=len(train_loader), desc=f"{phase_name} Epoch {epoch}/{end_epoch}", unit='Batch') as pbar:
             for pack in train_loader:
@@ -210,11 +210,11 @@ def train(config, train_loader, val_loader, fold):
             'checkpoint_file': config.nnunet_checkpoint,
             'configuration': config.nnunet_configuration
         }
-        model = nnUNetClassificationModel(class_num=config.class_num, pretrained_encoder_path=encoder_config)
-        print(f"✓ Using nnUNet encoder model with {config.class_num} classes")
+        model = nnUNetClassificationModel(num_classes=config.num_classes, pretrained_encoder_path=encoder_config)
+        print(f"✓ Using nnUNet encoder model with {config.num_classes} classes")
     else:
-        model = CustomModel(class_num=config.class_num)
-        print(f"✓ Using custom MONAI ResNet50 model with {config.class_num} classes")
+        model = CustomModel(num_classes=config.num_classes)
+        print(f"✓ Using custom MONAI ResNet50 model with {config.num_classes} classes")
     
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
@@ -259,7 +259,7 @@ def train(config, train_loader, val_loader, fold):
     for epoch in range(start_epoch, end_epoch + 1):
         model.train()
         epoch_loss = 0
-        cm = torch.zeros((config.class_num, config.class_num))
+        cm = torch.zeros((config.num_classes, config.num_classes))
 
         with tqdm(total=len(train_loader), desc=f"Full Training Epoch {epoch}/{config.epochs}", unit='Batch') as pbar:
             for pack in train_loader:
@@ -344,8 +344,8 @@ if __name__ == '__main__':
     # AS 데이터셋 사용
     train_set, label_to_idx, idx_to_label, unique_labels = dl_cls_dataset.get_as_dataset(args.img_size, mode='train')
     # 실제 클래스 수로 업데이트
-    args.class_num = len(unique_labels)
-    print(f"AS 데이터셋 로드 완료. 클래스 수: {args.class_num}")
+    args.num_classes = len(unique_labels)
+    print(f"AS 데이터셋 로드 완료. 클래스 수: {args.num_classes}")
     print(f"클래스 매핑: {label_to_idx}")
 
     print(vars(args))
