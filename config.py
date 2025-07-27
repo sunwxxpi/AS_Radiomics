@@ -22,7 +22,7 @@ class Config:
     ENABLE_DL_EMBEDDING = True          # DL embedding 특징 사용 여부
 
     DL_MODEL_TYPE = 'nnunet'            # 'custom' 또는 'nnunet'
-    DL_IMG_SIZE = (32, 384, 320)        # DL 모델 입력 이미지 크기 (D, H, W) / nnUNet : (32, 384, 320), Med3D : (56, 448, 448)
+    DL_IMG_SIZE = (32, 384, 320)        # DL 모델 입력 이미지 크기 (D, H, W) / nnUNet : (16, 112, 128), (32, 384, 320), Med3D : (56, 448, 448)
     IMG_SIZE_DEPTH, IMG_SIZE_HEIGHT, IMG_SIZE_WIDTH = DL_IMG_SIZE
     DL_COMMENT_WRITER = f'{DL_MODEL_TYPE}_{IMG_SIZE_DEPTH}_{IMG_SIZE_HEIGHT}_{IMG_SIZE_WIDTH}'
     FOLD = None                         # None이면 1~5 모든 fold 사용, 숫자면 해당 fold만 사용
