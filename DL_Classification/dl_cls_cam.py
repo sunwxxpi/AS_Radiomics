@@ -123,6 +123,7 @@ class CAMVisualizer:
     def run_visualizations(self, image, cam, filename_prefix, target_class, class_names):
         """모든 시각화 실행 및 저장"""
         self._save_key_slices_grid(image, cam, filename_prefix, target_class, class_names)
+        self._save_all_slices_grid(image, cam, filename_prefix, target_class, class_names)
         self._save_3d_projection(image, cam, filename_prefix, target_class, class_names)
 
     def _create_slice_overlay(self, image_slice, cam_slice):
@@ -183,6 +184,45 @@ class CAMVisualizer:
         
         title = f'Key Slices (Top {len(key_indices)}) - Predicted: {class_names[target_class]}'
         save_path = os.path.join(self.save_dir, f'{filename_prefix}_key_slices.png')
+        self._save_plot(fig, title, save_path)
+
+    def _save_all_slices_grid(self, image, cam, filename_prefix, target_class, class_names):
+        """모든 슬라이스에 대한 격자 이미지를 저장"""
+        depth = image.shape[0]
+        slice_indices = list(range(depth))
+        grid_cols = int(np.ceil(np.sqrt(depth)))
+        
+        if not slice_indices:
+            return
+
+        # 격자 레이아웃 계산
+        num_slices = len(slice_indices)
+        grid_rows = int(np.ceil(num_slices / grid_cols))
+        
+        fig, axes = plt.subplots(grid_rows, grid_cols * 3, figsize=(grid_cols * 5, grid_rows * 5))
+        axes = axes.flatten() if axes.ndim > 1 else [axes]
+
+        for i in range(grid_rows * grid_cols):
+            base_idx = i * 3
+            if i < num_slices and base_idx + 2 < len(axes):
+                slice_idx = slice_indices[i]
+                
+                # 원본, CAM, 오버레이 이미지 표시
+                axes[base_idx].imshow(image[slice_idx], cmap='gray')
+                axes[base_idx].set_title(f'Original {slice_idx}', fontsize=8)
+                axes[base_idx+1].imshow(cam[slice_idx], cmap='jet', vmin=0, vmax=1)
+                axes[base_idx+1].set_title(f'CAM {slice_idx}', fontsize=8)
+                overlay = self._create_slice_overlay(image[slice_idx], cam[slice_idx])
+                axes[base_idx+2].imshow(overlay)
+                axes[base_idx+2].set_title(f'Overlay {slice_idx}', fontsize=8)
+            
+            # 축 비활성화
+            for j in range(3):
+                if base_idx + j < len(axes):
+                    axes[base_idx + j].axis('off')
+        
+        title = f'All Slices - Predicted: {class_names[target_class]}'
+        save_path = os.path.join(self.save_dir, f'{filename_prefix}_all_slices.png')
         self._save_plot(fig, title, save_path)
 
     def _save_3d_projection(self, image, cam, filename_prefix, target_class, class_names):
