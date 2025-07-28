@@ -1,6 +1,17 @@
 import argparse
 
 
+def setup_nnunet_path(nnunet_config):
+    """nnunet_config를 기반으로 nnUNet 관련 경로들을 자동 설정"""
+    base_path = f'./DL_Classification/nnUNet/{nnunet_config}'
+    
+    return {
+        'plans_file': f'{base_path}/nnUNetResEncUNetLPlans.json',
+        'dataset_json': f'{base_path}/dataset.json',
+        'checkpoint': f'{base_path}/checkpoint_final.pth'
+    }
+    
+
 def parse_img_size(img_size_str):
     """이미지 크기 문자열을 튜플로 변환하는 함수"""
     if isinstance(img_size_str, (tuple, list)):
@@ -35,17 +46,6 @@ def generate_writer_comment(model_type, img_size):
     if isinstance(img_size, (tuple, list)) and len(img_size) == 3:
         depth, height, width = img_size
         return f"{model_type}_{depth}_{height}_{width}"
-
-
-def setup_nnunet_paths(nnunet_config):
-    """nnunet_config를 기반으로 nnUNet 관련 경로들을 자동 설정"""
-    base_path = f'./DL_Classification/nnUNet/{nnunet_config}'
-    
-    return {
-        'plans_file': f'{base_path}/nnUNetResEncUNetLPlans.json',
-        'dataset_json': f'{base_path}/dataset.json',
-        'checkpoint': f'{base_path}/checkpoint_final.pth'
-    }
 
 
 def load_config():
@@ -96,7 +96,7 @@ def load_config():
     
     # nnUNet 경로 자동 설정
     if config.model_type == 'nnunet':
-        nnunet_paths = setup_nnunet_paths(config.nnunet_config)
+        nnunet_paths = setup_nnunet_path(config.nnunet_config)
         
         # 사용자가 직접 지정하지 않은 경우만 자동 설정
         if config.nnunet_plans_file is None:
