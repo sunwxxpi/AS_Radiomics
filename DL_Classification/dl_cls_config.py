@@ -55,7 +55,7 @@ def load_config():
     parser.add_argument('--save_model', type=bool, default=True)
 
     # MODEL PARAMETER
-    parser.add_argument('--img_size', type=str, default='(32, 384, 320)') # nnUNet : (32, 384, 320), Med3D : (56, 448, 448)
+    parser.add_argument('--img_size', type=str, default='(32, 384, 320)') # nnUNet : (16, 112, 128), (32, 384, 320), Med3D : (56, 448, 448)
     parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--num_classes', type=int, default=3)
     parser.add_argument('--fold', type=int, default=5)
