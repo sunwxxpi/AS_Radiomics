@@ -10,30 +10,31 @@ from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, classification_report, roc_auc_score, average_precision_score
 from dl_cls_model import CustomModel, nnUNetClassificationModel
 from dl_cls_config import load_config
+from dl_cls_cam import generate_cam_for_sample
 
 
 def plot_confusion_matrix(conf_matrix_raw, class_names, accuracy, f1, auc_score, ap_score, output_path):
+    """혼동행렬과 성능지표를 시각화하여 저장"""
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
-    # 정규화된 혼동 행렬 계산
+    # 정규화된 혼동행렬 계산 및 텍스트 어노테이션 생성
     conf_matrix_normalized = conf_matrix_raw.astype('float') / conf_matrix_raw.sum(axis=1)[:, np.newaxis]
     
-    # 각 셀에 표시할 텍스트 생성 (비율과 개수 함께)
-    combined_text = np.empty_like(conf_matrix_raw, dtype=object)
+    annot_text = np.empty_like(conf_matrix_raw, dtype=object)
     for i in range(conf_matrix_raw.shape[0]):
         for j in range(conf_matrix_raw.shape[1]):
-            combined_text[i, j] = f'{conf_matrix_normalized[i, j]:.3f}\n({conf_matrix_raw[i, j]})'
+            annot_text[i, j] = f'{conf_matrix_normalized[i, j]:.3f}\n({conf_matrix_raw[i, j]})'
     
-    # 성능 지표 문자열 생성
+    # 성능지표 제목 생성
     metrics_text = f"Accuracy: {accuracy:.4f} | F1-Score: {f1:.4f} | AUC: {auc_score:.4f} | AP: {ap_score:.4f}"
     
     plt.figure(figsize=(10, 10))
-    sns.heatmap(conf_matrix_normalized, annot=combined_text, fmt='',
-               xticklabels=class_names, yticklabels=class_names,
-               cmap='Blues', annot_kws={"size": 20}, vmin=0.0, vmax=1.0,
-               cbar=False, square=True)
+    sns.heatmap(conf_matrix_normalized, annot=annot_text, fmt='',
+                xticklabels=class_names, yticklabels=class_names,
+                cmap='Blues', annot_kws={"size": 20}, vmin=0.0, vmax=1.0,
+                cbar=False, square=True)
     plt.title(f'Confusion Matrix\n\n{metrics_text}\n(Values: Normalized Ratio (Raw Count))', 
-             fontsize=20, pad=20)
+              fontsize=20, pad=20)
     plt.xlabel('Predicted Label', fontsize=18)
     plt.ylabel('True Label', fontsize=18)
     plt.xticks(fontsize=16)
@@ -45,6 +46,7 @@ def plot_confusion_matrix(conf_matrix_raw, class_names, accuracy, f1, auc_score,
 
 
 def load_model(model_path, config):
+    """설정에 따라 모델 로드 및 DataParallel 적용"""
     if config.model_type == 'nnunet':
         encoder_config = {
             'plans_file': config.nnunet_plans_file,
@@ -63,190 +65,201 @@ def load_model(model_path, config):
     return model
 
 
-def evaluate_single_fold(labels, probs, class_names, config, fold_number):
-    """
-    Evaluate single fold results.
-    """
+def calculate_metrics(labels, probs, class_names):
+    """예측 확률로부터 모든 성능지표 계산"""
     preds = np.argmax(probs, axis=1)
     accuracy = accuracy_score(labels, preds)
     f1 = f1_score(labels, preds, average='macro')
     
-    # AUC 계산
+    # 이진/다중클래스 AUC 계산
     try:
         if len(class_names) == 2:
-            # 이진 분류인 경우
             auc = roc_auc_score(labels, probs[:, 1])
-        else:
-            # 다중 분류인 경우 (macro-average)
-            auc = roc_auc_score(labels, probs, multi_class='ovr', average='macro')
-    except ValueError:
-        auc = 0.0
-    
-    # AP 계산
-    try:
-        if len(class_names) == 2:
-            # 이진 분류인 경우
             ap = average_precision_score(labels, probs[:, 1])
         else:
-            # 다중 분류인 경우 (macro-average)
+            auc = roc_auc_score(labels, probs, multi_class='ovr', average='macro')
             ap = average_precision_score(labels, probs, average='macro')
     except ValueError:
-        ap = 0.0
+        auc = ap = 0.0
+    
+    return accuracy, f1, auc, ap
+
+
+def evaluate_single_fold(labels, probs, class_names, config, fold_number):
+    """단일 fold 성능 평가 및 혼동행렬 저장"""
+    accuracy, f1, auc, ap = calculate_metrics(labels, probs, class_names)
+    preds = np.argmax(probs, axis=1)
     
     class_report = classification_report(labels, preds, target_names=class_names)
-    conf_matrix = confusion_matrix(labels, preds, normalize=None)  # 원본 개수
+    conf_matrix = confusion_matrix(labels, preds)
 
     print(f'Fold {fold_number} Results')
-    print(f'Accuracy: {accuracy:.4f}')
-    print(f'F1 Score: {f1:.4f}')
-    print(f'AUC: {auc:.4f}')
-    print(f'AP: {ap:.4f}')
+    print(f'Accuracy: {accuracy:.4f} | F1: {f1:.4f} | AUC: {auc:.4f} | AP: {ap:.4f}')
     print(class_report)
 
-    # Confusion matrix 저장 경로
-    output_path = os.path.join('./DL_Classification', './results', config.writer_comment)
+    # 혼동행렬 시각화 저장
+    output_path = os.path.join('./DL_Classification', 'results', config.writer_comment)
     conf_matrix_plot_path = os.path.join(output_path, 'conf_matrix', f'fold_{fold_number}.png')
-
-    # Confusion matrix 그리기
     plot_confusion_matrix(conf_matrix, class_names, accuracy, f1, auc, ap, conf_matrix_plot_path)
 
 
 def evaluate_ensemble(all_labels, all_probs, class_names, config):
-    """
-    Evaluate ensemble results using both soft voting and hard voting.
-    """
-    # 각 Fold의 예측 확률을 합산합니다.
-    # all_probs의 형태: (fold 수, 샘플 수, 클래스 수)
-    
-    # Soft Voting: 모든 fold의 평균 확률로 최종 클래스 결정
-    ensemble_probs = np.mean(all_probs, axis=0)  # (샘플 수, 클래스 수)
+    """Soft/Hard voting을 이용한 앙상블 성능 평가"""
+    ensemble_probs = np.mean(all_probs, axis=0)  # Soft voting
     ensemble_preds_soft = np.argmax(ensemble_probs, axis=1)
 
-    # Hard Voting: 각 모델의 클래스 예측을 다수결로 결정
-    all_preds = np.array([np.argmax(prob, axis=1) for prob in all_probs])  # (fold 수, 샘플 수)
+    # Hard voting: 각 fold 예측의 다수결
+    all_preds = np.array([np.argmax(prob, axis=1) for prob in all_probs])
     ensemble_preds_hard = np.apply_along_axis(lambda x: np.bincount(x).argmax(), 0, all_preds)
 
-    # 평가 및 결과 출력
     for voting_type, ensemble_preds in [('Soft Voting', ensemble_preds_soft), ('Hard Voting', ensemble_preds_hard)]:
-        accuracy = accuracy_score(all_labels, ensemble_preds)
-        f1 = f1_score(all_labels, ensemble_preds, average='macro')
+        accuracy, f1, auc, ap = calculate_metrics(all_labels, ensemble_probs, class_names)
         
-        # AUC 계산
-        try:
-            if len(class_names) == 2:
-                # 이진 분류인 경우
-                if voting_type == 'Soft Voting':
-                    auc = roc_auc_score(all_labels, ensemble_probs[:, 1])
-                else:
-                    # Hard voting의 경우 예측된 클래스만 있으므로 AUC 계산이 어려움
-                    # 대신 soft voting의 확률을 사용
-                    auc = roc_auc_score(all_labels, ensemble_probs[:, 1])
-            else:
-                # 다중 분류인 경우
-                if voting_type == 'Soft Voting':
-                    auc = roc_auc_score(all_labels, ensemble_probs, multi_class='ovr', average='macro')
-                else:
-                    # Hard voting의 경우 soft voting의 확률을 사용
-                    auc = roc_auc_score(all_labels, ensemble_probs, multi_class='ovr', average='macro')
-        except ValueError:
-            auc = 0.0
-        
-        # AP 계산
-        try:
-            if len(class_names) == 2:
-                # 이진 분류인 경우
-                if voting_type == 'Soft Voting':
-                    ap = average_precision_score(all_labels, ensemble_probs[:, 1])
-                else:
-                    # Hard voting의 경우 soft voting의 확률을 사용
-                    ap = average_precision_score(all_labels, ensemble_probs[:, 1])
-            else:
-                # 다중 분류인 경우
-                if voting_type == 'Soft Voting':
-                    ap = average_precision_score(all_labels, ensemble_probs, average='macro')
-                else:
-                    # Hard voting의 경우 soft voting의 확률을 사용
-                    ap = average_precision_score(all_labels, ensemble_probs, average='macro')
-        except ValueError:
-            ap = 0.0
-            
         class_report = classification_report(all_labels, ensemble_preds, target_names=class_names)
-        conf_matrix = confusion_matrix(all_labels, ensemble_preds, normalize=None)  # 원본 개수
+        conf_matrix = confusion_matrix(all_labels, ensemble_preds)
 
         print(f'{voting_type} Results')
-        print(f'Accuracy: {accuracy:.4f}')
-        print(f'F1 Score: {f1:.4f}')
-        print(f'AUC: {auc:.4f}')
-        print(f'AP: {ap:.4f}')
+        print(f'Accuracy: {accuracy:.4f} | F1: {f1:.4f} | AUC: {auc:.4f} | AP: {ap:.4f}')
         print(class_report)
 
-        # Confusion matrix 저장 경로
-        output_path = os.path.join('./DL_Classification', './results', config.writer_comment)
-        conf_matrix_plot_path = os.path.join(output_path, 'conf_matrix', f'ensemble_{voting_type.lower().replace(" ", "_")}.png')
+        # 앙상블 혼동행렬 저장
+        output_path = os.path.join('./DL_Classification', 'results', config.writer_comment)
+        plot_path = os.path.join(output_path, 'conf_matrix', f'ensemble_{voting_type.lower().replace(" ", "_")}.png')
+        plot_confusion_matrix(conf_matrix, class_names, accuracy, f1, auc, ap, plot_path)
 
-        # Confusion matrix 그리기
-        plot_confusion_matrix(conf_matrix, class_names, accuracy, f1, auc, ap, conf_matrix_plot_path)
+
+def generate_cam_for_samples(model, cam_data_list, class_names, cam_save_dir):
+    """수집된 샘플들에 대한 CAM 시각화 생성"""
+    print(f"\n--- {len(cam_data_list)}개 샘플 CAM 생성 시작 ---")
+    device = next(model.parameters()).device
+    successful_count = 0
+    
+    for i, data in enumerate(cam_data_list):
+        image_tensor = data['image_tensor'].to(device)
+        true_label = data['true_label']
+        sample_name = data['sample_name']
+        
+        print(f"샘플 {i + 1}/{len(cam_data_list)}: {sample_name} (실제: {class_names[true_label]})")
+        
+        try:
+            cam_result = generate_cam_for_sample(
+                model=model,
+                image_tensor=image_tensor,
+                target_class=None,
+                class_names=class_names,
+                save_dir=cam_save_dir,
+                sample_name=f"{sample_name.replace('.nii.gz', '')}_true_{class_names[true_label]}"
+            )
+            
+            if cam_result and cam_result[0] is not None:
+                _, predicted_class = cam_result
+                print(f"-> 예측: {class_names[predicted_class]} | CAM 생성 성공")
+                successful_count += 1
+            else:
+                print(f"-> CAM 생성 실패")
+        
+        except Exception as e:
+            print(f"-> CAM 생성 오류: {e}")
+            
+    print(f"--- CAM 생성 완료: {successful_count}/{len(cam_data_list)}개 성공 ---")
+
+
+def evaluate_fold_and_generate_cam(config, model, test_loader, class_names, fold_number, save_cam=True, max_cam_samples=10):
+    """단일 fold 추론 실행 및 선택적 CAM 생성"""
+    device = next(model.parameters()).device
+    all_probs = []
+    all_labels = []
+    cam_data_list = []
+
+    model.eval()
+    
+    try:
+        # 추론 루프: 예측값 계산 및 CAM용 데이터 수집
+        with torch.no_grad():
+            for pack in tqdm(test_loader, desc=f'Testing Fold {fold_number}', unit='batch'):
+                images = pack['imgs'].to(device)
+                labels = pack['labels'].to(device)
+                names = pack['names']
+
+                output = model(images=images)
+                probs = torch.softmax(output, dim=1)
+                
+                all_probs.append(probs.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
+                
+                # CAM 생성용 샘플 데이터 수집
+                if save_cam and len(cam_data_list) < max_cam_samples:
+                    for i in range(images.shape[0]):
+                        if len(cam_data_list) >= max_cam_samples:
+                            break
+                        
+                        cam_data_list.append({
+                            'image_tensor': images[i].clone().cpu(),
+                            'true_label': labels[i].item(),
+                            'sample_name': names[i]
+                        })
+
+        # CAM 시각화 생성
+        if save_cam and cam_data_list:
+            cam_save_dir = os.path.join('./DL_Classification', 'results', config.writer_comment, 'cam_visualization', f'fold_{fold_number}')
+            os.makedirs(cam_save_dir, exist_ok=True)
+            generate_cam_for_samples(model, cam_data_list, class_names, cam_save_dir)
+
+    finally:
+        torch.cuda.empty_cache()
+
+    return all_labels, np.concatenate(all_probs, axis=0)
 
 
 def main():
+    """메인 평가 파이프라인"""
     config = load_config()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # AS 데이터셋을 한 번만 로드
-    print("데이터셋 로딩 중...")
-    test_dataset, label_to_idx, idx_to_label, unique_labels = dl_cls_dataset.get_as_dataset(config.img_size, mode='test')
-    # 실제 클래스 수로 업데이트
-    config.num_classes = len(unique_labels)
-    print(f"AS 데이터셋 로드 완료. 클래스 수: {config.num_classes}")
-    print(f"클래스 매핑: {label_to_idx}")
-    
-    test_loader = DataLoader(test_dataset, batch_size=config.batch_size, shuffle=False, num_workers=6)
+    # 테스트 데이터셋 로드
+    print("테스트 데이터셋 로딩...")
+    test_dataset, _, _, class_names = dl_cls_dataset.get_as_dataset(config.img_size, mode='test')
+    config.num_classes = len(class_names)
+    print(f"데이터셋 로드 완료. 클래스 수: {config.num_classes}")
 
-    # 앙상블 예측을 위한 변수를 초기화합니다.
-    all_labels = []  # 모든 fold에서 동일한 레이블을 저장합니다.
-    all_probs = []  # 각 fold의 예측 확률을 저장할 리스트
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=6)
 
+    # 앙상블 평가용 변수
+    all_fold_labels = []
+    all_fold_probs = []
+
+    # CAM 설정
+    should_save_cam = config.enable_cam
+    max_samples_for_cam = 20
+    print(f"CAM 생성: {'활성화' if should_save_cam else '비활성화'}")
+
+    # 각 fold 평가
     for fold in range(1, config.fold + 1):
-        print(f"\n=== Fold {fold} 평가 시작 ===")
+        print(f"\n{'='*20} Fold {fold} 평가 시작 {'='*20}")
         model_path = os.path.join(config.model_path, config.writer_comment, str(fold), 'best_model.pth')
         
         if not os.path.exists(model_path):
-            print(f"Model for fold {fold} not found at {model_path}")
+            print(f"Fold {fold} 모델 파일 없음. 건너뜀.")
             continue
         
-        model = load_model(model_path, config)
-        model = model.to(device)
-        model.eval()
-
-        fold_probs = []  # 각 fold의 예측 확률을 저장할 리스트
-        fold_labels = []  # 각 fold의 레이블을 저장할 리스트
-
-        with torch.no_grad():
-            for pack in tqdm(test_loader, desc=f'Testing Fold {fold}', unit='batch'):
-                images = pack['imgs'].to(device)
-                labels = pack['labels'].to(device)
-
-                output = model(images=images)
-                probs = torch.softmax(output, dim=1)  # 각 클래스에 대한 확률 계산
-                fold_probs.append(probs.cpu().numpy())
-
-                # 각 배치에서 레이블을 추가합니다.
-                fold_labels.extend(labels.cpu().numpy())
-
-        # 현재 fold의 레이블 및 예측 확률을 저장합니다.
-        fold_probs = np.concatenate(fold_probs, axis=0)
-        all_probs.append(fold_probs)
-
-        # 첫 번째 fold에서 레이블을 저장합니다.
+        model = load_model(model_path, config).to(device)
+        
+        # fold 추론 및 CAM 생성
+        fold_labels, fold_probs = evaluate_fold_and_generate_cam(
+            config, model, test_loader, class_names, fold,
+            save_cam=should_save_cam, max_cam_samples=max_samples_for_cam
+        )
+        
         if fold == 1:
-            all_labels = fold_labels
+            all_fold_labels = fold_labels
+        
+        all_fold_probs.append(fold_probs)
+        evaluate_single_fold(fold_labels, fold_probs, class_names, config, fold)
 
-        # 각 fold의 성능 평가 (클래스 이름 사용)
-        evaluate_single_fold(fold_labels, fold_probs, unique_labels, config, fold)
-
-    # 앙상블 평가 (클래스 이름 사용)
-    print(f"\n=== 앙상블 평가 시작 ===")
-    evaluate_ensemble(all_labels, all_probs, unique_labels, config)
+    # 앙상블 평가
+    if all_fold_probs:
+        print(f"\n{'='*20} 앙상블 평가 시작 {'='*20}")
+        evaluate_ensemble(all_fold_labels, all_fold_probs, class_names, config)
 
 
 if __name__ == '__main__':

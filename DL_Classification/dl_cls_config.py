@@ -65,6 +65,9 @@ def load_config():
     # MODEL TYPE SELECTION
     parser.add_argument('--model_type', type=str, default='nnunet', choices=['custom', 'nnunet'], 
                        help='Model type: custom (MONAI ResNet50) or nnunet (nnUNet encoder)')
+    
+    # CAM GENERATION CONTROL
+    parser.add_argument('--enable_cam', action='store_true')
 
     # nnUNet SPECIFIC PARAMETERS
     parser.add_argument('--nnunet_config', type=str, default='Dataset001_COCA')
