@@ -184,9 +184,9 @@ class Config:
         
         # DL과 dilation이 모두 비활성화된 경우 default 접두사 사용
         if not cls.ENABLE_DL_EMBEDDING and not cls.ENABLE_DILATION:
-            final_dir_name = f"default_av_roi_cropped_{timestamp}"
+            final_dir_name = f"default_{timestamp}"
         else:
-            final_dir_name = f"{dl_suffix}{dilation_suffix}_av_roi_cropped_{timestamp}".lstrip('_')
+            final_dir_name = f"{dl_suffix}{dilation_suffix}_{timestamp}".lstrip('_')
         
         # 데이터셋 타입에 따라 하위 디렉토리 결정
         dataset_type = cls._get_dataset_type()
