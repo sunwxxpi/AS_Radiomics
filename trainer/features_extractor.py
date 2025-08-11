@@ -167,9 +167,12 @@ class RadiomicsExtractor:
             features['case_id'] = case_id
             features['severity'] = label
             features['image_path'] = image_path  # DL 특징 추출용 경로 저장
+            # 데이터 소스 정보 추가 (디렉토리 기반 분할을 위해)
+            data_source = 'train' if 'Tr' in set_name else 'val'
+            features['data_source'] = data_source
             
             radiomics_count = len([k for k in features.keys() 
-                                 if k not in ['case_id', 'severity', 'image_path']])
+                                 if k not in ['case_id', 'severity', 'image_path', 'data_source']])
             
             print(f"      성공: {radiomics_count}개 radiomics 특징 추출")
             
@@ -231,7 +234,7 @@ class RadiomicsExtractor:
         # 특징 개수 확인
         dl_feature_count = len([col for col in result_df.columns if col.startswith('dl_embedding_')])
         radiomics_count = len([col for col in result_df.columns 
-                             if not col.startswith('dl_embedding_') and col not in ['severity', 'case_id']])
+                             if not col.startswith('dl_embedding_') and col not in ['severity', 'case_id', 'data_source']])
         
         print(f"    Fold {fold}: {radiomics_count}개 radiomics + {dl_feature_count}개 DL embedding 특징")
         

@@ -63,6 +63,8 @@ class DataPreprocessor:
         X = df.drop('severity', axis=1) 
         if 'as_grade' in X.columns:
             X = X.drop('as_grade', axis=1)
+        if 'data_source' in X.columns:
+            X = X.drop('data_source', axis=1)
             
         y = df['severity'].copy()
         

@@ -15,6 +15,11 @@ class Config:
     IMAGE_VAL_DIR = os.path.join(BASE_DIR, 'imagesVal')
     LABEL_VAL_DIR = os.path.join(BASE_DIR, 'labelsVal')
     
+    # 데이터 분할 설정
+    DATA_SPLIT_MODE = 'fix'    # 분할 모드: 'random' (병합 후 랜덤 분할) 또는 'fix' (디렉토리 기반 고정 분할)
+    DATA_SPLIT_RANDOM_STATE = 42  # 데이터 분할을 위한 랜덤 시드 (random 모드에서만 사용)
+    TEST_SIZE_RATIO = 0.4         # 테스트 데이터 비율 (random 모드에서만 사용, 0.0 ~ 1.0)
+    
     # 분류 모드 설정 (binary 또는 multi)
     CLASSIFICATION_MODE = 'multi'  # 기본값은 multi 분류
     
@@ -40,10 +45,6 @@ class Config:
     # Dilation 설정
     ENABLE_DILATION = True   # Dilation 사용 여부
     DILATION_ITERATIONS = 1   # Dilation 반복 횟수
-    
-    # 데이터 분할 설정
-    DATA_SPLIT_RANDOM_STATE = 42  # 데이터 분할을 위한 랜덤 시드
-    TEST_SIZE_RATIO = 0.4         # 테스트 데이터 비율 (0.0 ~ 1.0)
     
     @classmethod
     def get_dl_model_paths(cls):
@@ -217,11 +218,20 @@ class Config:
         """사용 가능한 분류 모드 목록 반환"""
         return ['binary', 'multi']
     
+    @classmethod 
+    def get_available_data_split_modes(cls):
+        """사용 가능한 데이터 분할 모드 목록 반환"""
+        return ['random', 'fix']
+    
     @classmethod
     def print_config_summary(cls):
         """현재 설정 요약 출력"""
         print("=== 현재 설정 요약 ===")
         print(f"분류 모드: {cls.CLASSIFICATION_MODE}")
+        print(f"데이터 분할 모드: {cls.DATA_SPLIT_MODE}")
+        if cls.DATA_SPLIT_MODE == 'random':
+            print(f"테스트 데이터 비율: {cls.TEST_SIZE_RATIO}")
+            print(f"랜덤 시드: {cls.DATA_SPLIT_RANDOM_STATE}")
         print(f"특징 선택 방법: {cls.FEATURE_SELECTION_METHOD}")
         print(f"분류 모델: {cls.CLASSIFICATION_MODELS}")
         print(f"Dilation 사용: {cls.ENABLE_DILATION}")
@@ -231,6 +241,5 @@ class Config:
         if cls.ENABLE_DL_EMBEDDING:
             print(f"DL 모델 타입: {cls.DL_MODEL_TYPE}")
             print(f"DL 모델 경로: {cls.DL_MODEL_PATH}")
-        print(f"랜덤 시드: {cls.RANDOM_STATE}")
         print(f"CV 폴드 수: {cls.CV_FOLDS}")
         print("========================")
