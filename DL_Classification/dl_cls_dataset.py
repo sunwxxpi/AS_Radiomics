@@ -240,7 +240,7 @@ def prepare_as_data(data_split_mode='fix', data_split_random_state=42, test_size
         })
         
         print(f"    Train 데이터: {len(train_df)} 샘플")
-        print(f"    Test 데이터: {len(test_df)} 샘플")
+        print(f"    Test 데이터: {len(test_df)} 샘플\n")
         
     elif data_split_mode == 'random':
         # 랜덤 분할: 전체 데이터를 랜덤하게 분할
@@ -306,7 +306,7 @@ def get_as_dataset(img_size, mode='train', data_split_mode='fix', data_split_ran
     
     # Fallback으로 기본값 사용
     if intensity_props is None:
-        print("ℹ️ Using default intensity normalization values")
+        print("⚠️ Using default intensity normalization values")
         intensity_props = {
             'mean_intensity': 363.5522766113281,
             'std_intensity': 249.69992065429688,
