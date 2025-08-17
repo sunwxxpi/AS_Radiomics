@@ -76,6 +76,11 @@ def load_config():
     parser.add_argument('--nnunet_checkpoint', type=str, default=None)
     parser.add_argument('--nnunet_configuration', type=str, default='3d_fullres')
     
+    # DATA SPLIT PARAMETERS
+    parser.add_argument('--data_split_mode', type=str, default='fix', choices=['random', 'fix'])
+    parser.add_argument('--data_split_random_state', type=int, default=42)
+    parser.add_argument('--test_size_ratio', type=float, default=0.4)
+        
     # LEARNING RATE PARAMETERS
     parser.add_argument('--loss_function', type=str, default='CE')
     parser.add_argument('--optimizer', type=str, default='AdamW', choices=['SGD', 'Adam', 'AdamW'])

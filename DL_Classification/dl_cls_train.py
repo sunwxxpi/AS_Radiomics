@@ -341,12 +341,22 @@ if __name__ == '__main__':
 
     cv = StratifiedKFold(n_splits=args.fold, random_state=42, shuffle=True)
     
-    # AS 데이터셋 사용
-    train_set, label_to_idx, idx_to_label, unique_labels = dl_cls_dataset.get_as_dataset(args.img_size, mode='train')
+    # AS 데이터셋 사용 (분할 설정 적용)
+    train_set, label_to_idx, idx_to_label, unique_labels = dl_cls_dataset.get_as_dataset(
+        args.img_size, 
+        mode='train',
+        data_split_mode=args.data_split_mode,
+        data_split_random_state=args.data_split_random_state,
+        test_size_ratio=args.test_size_ratio
+    )
     # 실제 클래스 수로 업데이트
     args.num_classes = len(unique_labels)
     print(f"AS 데이터셋 로드 완료. 클래스 수: {args.num_classes}")
     print(f"클래스 매핑: {label_to_idx}")
+    print(f"데이터 분할 모드: {args.data_split_mode}")
+    if args.data_split_mode == 'random':
+        print(f"  - 테스트 데이터 비율: {args.test_size_ratio}")
+        print(f"  - 랜덤 시드: {args.data_split_random_state}")
 
     print(vars(args))
     args_path = os.path.join(args.model_path, args.writer_comment)

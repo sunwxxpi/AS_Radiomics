@@ -216,11 +216,21 @@ def main():
     config = load_config()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # 테스트 데이터셋 로드
+    # 테스트 데이터셋 로드 (분할 설정 적용)
     print("테스트 데이터셋 로딩...")
-    test_dataset, _, _, class_names = dl_cls_dataset.get_as_dataset(config.img_size, mode='test')
+    test_dataset, _, _, class_names = dl_cls_dataset.get_as_dataset(
+        config.img_size, 
+        mode='test',
+        data_split_mode=config.data_split_mode,
+        data_split_random_state=config.data_split_random_state,
+        test_size_ratio=config.test_size_ratio
+    )
     config.num_classes = len(class_names)
     print(f"데이터셋 로드 완료. 클래스 수: {config.num_classes}")
+    print(f"데이터 분할 모드: {config.data_split_mode}")
+    if config.data_split_mode == 'random':
+        print(f"  - 테스트 데이터 비율: {config.test_size_ratio}")
+        print(f"  - 랜덤 시드: {config.data_split_random_state}")
 
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=6)
 

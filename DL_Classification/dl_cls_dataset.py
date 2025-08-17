@@ -99,8 +99,14 @@ class ASDataset(Dataset):
         }
 
 
-def prepare_as_data():
-    """AS 데이터 준비 - DataSplitter를 사용한 train/test 분할"""
+def prepare_as_data(data_split_mode='fix', data_split_random_state=42, test_size_ratio=0.4):
+    """AS 데이터 준비 - 설정에 따른 train/test 분할
+    
+    Args:
+        data_split_mode: 분할 모드 ('fix' 또는 'random')
+        data_split_random_state: 랜덤 시드 (random 모드에서만 사용)
+        test_size_ratio: 테스트 데이터 비율 (random 모드에서만 사용)
+    """
     
     # 기존 데이터 로더 사용
     data_loader = ASDataLoader(Config.LABEL_FILE)
@@ -160,25 +166,105 @@ def prepare_as_data():
         count = sum(1 for l in all_labels if l == label)
         print(f"    {label}: {count}")
     
-    # 전체 데이터를 DataFrame으로 생성
-    all_df = pd.DataFrame({
-        'image_path': all_files,
-        'severity': all_labels
-    })
-    
-    # DataSplitter를 사용하여 train/test 분할
-    print("\n  DataSplitter를 사용한 train/test 분할...")
-    splitter = DataSplitter()
-    train_df, test_df = splitter.split_data(all_df, mode=Config.CLASSIFICATION_MODE)
+    if data_split_mode == 'fix':
+        # 고정 분할: 디렉토리 기반으로 분할
+        print(f"\n  고정 분할 모드: 디렉토리 기반 분할")
+        
+        # TR 디렉토리 데이터를 train으로, VAL 디렉토리 데이터를 test로 사용
+        train_files, train_labels = [], []
+        test_files, test_labels = [], []
+        
+        # TR 디렉토리에서 데이터 수집 (train)
+        if os.path.exists(Config.IMAGE_TR_DIR):
+            nii_files = glob(os.path.join(Config.IMAGE_TR_DIR, "*.nii.gz"))
+            for file_path in nii_files:
+                filename = os.path.basename(file_path)
+                match = re.match(r'([A-Za-z0-9\.\-]+)_(\d{4,})_0000\.nii\.gz', filename)
+                if match:
+                    patient_id = match.group(1).strip()
+                    if patient_id in severity_map:
+                        train_files.append(file_path)
+                        train_labels.append(severity_map[patient_id])
+        
+        # VAL 디렉토리에서 데이터 수집 (test)
+        if os.path.exists(Config.IMAGE_VAL_DIR):
+            nii_files = glob(os.path.join(Config.IMAGE_VAL_DIR, "*.nii.gz"))
+            for file_path in nii_files:
+                filename = os.path.basename(file_path)
+                match = re.match(r'([A-Za-z0-9\.\-]+)_(\d{4,})_0000\.nii\.gz', filename)
+                if match:
+                    patient_id = match.group(1).strip()
+                    if patient_id in severity_map:
+                        test_files.append(file_path)
+                        test_labels.append(severity_map[patient_id])
+        
+        train_df = pd.DataFrame({
+            'image_path': train_files,
+            'severity': train_labels
+        })
+        
+        test_df = pd.DataFrame({
+            'image_path': test_files,
+            'severity': test_labels
+        })
+        
+        print(f"    Train 데이터: {len(train_df)} 샘플")
+        print(f"    Test 데이터: {len(test_df)} 샘플")
+        
+    elif data_split_mode == 'random':
+        # 랜덤 분할: 전체 데이터를 랜덤하게 분할
+        print(f"\n  랜덤 분할 모드: 전체 데이터 랜덤 분할 (test_ratio={test_size_ratio}, random_state={data_split_random_state})")
+        
+        # 전체 데이터를 DataFrame으로 생성
+        all_df = pd.DataFrame({
+            'image_path': all_files,
+            'severity': all_labels
+        })
+        
+        # DataSplitter를 사용하여 train/test 분할 (랜덤 모드로 설정)
+        original_mode = Config.DATA_SPLIT_MODE
+        original_random_state = Config.DATA_SPLIT_RANDOM_STATE
+        original_test_ratio = Config.TEST_SIZE_RATIO
+        
+        # 임시로 설정 변경
+        Config.DATA_SPLIT_MODE = 'random'
+        Config.DATA_SPLIT_RANDOM_STATE = data_split_random_state
+        Config.TEST_SIZE_RATIO = test_size_ratio
+        
+        splitter = DataSplitter()
+        train_df, test_df = splitter.split_data(all_df, mode=Config.CLASSIFICATION_MODE)
+        
+        # 원래 설정 복원
+        Config.DATA_SPLIT_MODE = original_mode
+        Config.DATA_SPLIT_RANDOM_STATE = original_random_state
+        Config.TEST_SIZE_RATIO = original_test_ratio
+        
+        print(f"    Train 데이터: {len(train_df)} 샘플")
+        print(f"    Test 데이터: {len(test_df)} 샘플")
+        
+    else:
+        raise ValueError(f"지원하지 않는 data_split_mode: {data_split_mode}")
     
     return train_df, test_df, label_to_idx, idx_to_label, unique_labels
 
 
-def get_as_dataset(img_size, mode='train'):
-    """AS 데이터셋을 위한 새로운 함수"""
+def get_as_dataset(img_size, mode='train', data_split_mode='fix', data_split_random_state=42, test_size_ratio=0.4):
+    """AS 데이터셋을 위한 새로운 함수
+    
+    Args:
+        img_size: 이미지 크기
+        mode: 데이터셋 모드 ('train', 'test', 'val')
+        data_split_mode: 분할 모드 ('fix' 또는 'random')
+        data_split_random_state: 랜덤 시드 (random 모드에서만 사용)
+        test_size_ratio: 테스트 데이터 비율 (random 모드에서만 사용)
+    """
     
     # 데이터 준비
-    train_df, test_df, label_to_idx, idx_to_label, unique_labels = prepare_as_data()
+    train_df, test_df, label_to_idx, idx_to_label, unique_labels = prepare_as_data(
+        data_split_mode=data_split_mode,
+        data_split_random_state=data_split_random_state,
+        test_size_ratio=test_size_ratio
+    )
     
     ct_normalization = CTNormalization(
         mean_intensity=363.5522766113281,
