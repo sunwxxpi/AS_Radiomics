@@ -2,6 +2,7 @@ import os
 import sys
 import glob
 import re
+import json
 import pandas as pd
 import numpy as np
 import torch
@@ -16,6 +17,36 @@ sys.path.append(parent_dir)
 from config import Config
 from data.loader import DataLoader as ASDataLoader
 from utils.data_splitter import DataSplitter
+
+
+def load_intensity_properties_from_plans(plans_file_path):
+    """nnUNet plans 파일에서 intensity properties를 로드하는 함수"""
+    if not os.path.exists(plans_file_path):
+        print(f"⚠️ Warning: Plans file not found at {plans_file_path}")
+        return None
+    
+    try:
+        with open(plans_file_path, 'r') as f:
+            plans_data = json.load(f)
+        
+        # foreground_intensity_properties_per_channel에서 첫 번째 채널 정보 추출
+        intensity_props = plans_data.get('foreground_intensity_properties_per_channel', {})
+        
+        if '0' in intensity_props:
+            channel_0_props = intensity_props['0']
+            return {
+                'mean_intensity': float(channel_0_props.get('mean', 340.6403503417969)),
+                'std_intensity': float(channel_0_props.get('std', 239.483154296875)),
+                'lower_bound': float(channel_0_props.get('percentile_00_5', 130.0)),
+                'upper_bound': float(channel_0_props.get('percentile_99_5', 1272.0))
+            }
+        else:
+            print(f"⚠️ Warning: Channel '0' not found in intensity properties")
+            return None
+            
+    except Exception as e:
+        print(f"⚠️ Warning: Failed to load intensity properties from {plans_file_path}: {e}")
+        return None
 
 
 class CTNormalization:
@@ -266,12 +297,29 @@ def get_as_dataset(img_size, mode='train', data_split_mode='fix', data_split_ran
         test_size_ratio=test_size_ratio
     )
     
-    ct_normalization = CTNormalization(
-        mean_intensity=363.5522766113281,
-        std_intensity=249.69992065429688,
-        lower_bound=130.0,
-        upper_bound=1298.0
-    )
+    # nnUNet plans 파일에서 intensity properties 로드 시도
+    intensity_props = None
+    if hasattr(Config, 'DL_NNUNET_CONFIG') and Config.DL_NNUNET_CONFIG:
+        plans_file = Config.DL_NNUNET_CONFIG.get('plans_file')
+        if plans_file:
+            intensity_props = load_intensity_properties_from_plans(plans_file)
+    
+    # Fallback으로 기본값 사용
+    if intensity_props is None:
+        print("ℹ️ Using default intensity normalization values")
+        intensity_props = {
+            'mean_intensity': 363.5522766113281,
+            'std_intensity': 249.69992065429688,
+            'lower_bound': 130.0,
+            'upper_bound': 1298.0
+        }
+    else:
+        print(f"✓ Loaded intensity properties from nnUNet plans file:")
+        print(f"  Mean: {intensity_props['mean_intensity']:.2f}")
+        print(f"  Std: {intensity_props['std_intensity']:.2f}")
+        print(f"  Lower bound: {intensity_props['lower_bound']:.2f}")
+        print(f"  Upper bound: {intensity_props['upper_bound']:.2f}\n")
+    ct_normalization = CTNormalization(**intensity_props)
     
     # img_size가 튜플이 아닌 경우 튜플로 변환
     if isinstance(img_size, (int, float)):

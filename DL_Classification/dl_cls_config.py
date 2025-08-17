@@ -1,17 +1,6 @@
 import argparse
 
 
-def setup_nnunet_path(nnunet_config):
-    """nnunet_config를 기반으로 nnUNet 관련 경로들을 자동 설정"""
-    base_path = f'./DL_Classification/nnUNet/{nnunet_config}'
-    
-    return {
-        'plans_file': f'{base_path}/nnUNetResEncUNetLPlans.json',
-        'dataset_json': f'{base_path}/dataset.json',
-        'checkpoint': f'{base_path}/checkpoint_final.pth'
-    }
-    
-
 def parse_img_size(img_size_str):
     """이미지 크기 문자열을 튜플로 변환하는 함수"""
     if isinstance(img_size_str, (tuple, list)):
@@ -68,13 +57,6 @@ def load_config():
     
     # CAM GENERATION CONTROL
     parser.add_argument('--enable_cam', action='store_true')
-
-    # nnUNet SPECIFIC PARAMETERS
-    parser.add_argument('--nnunet_config', type=str, default='Dataset001_COCA')
-    parser.add_argument('--nnunet_plans_file', type=str, default=None)
-    parser.add_argument('--nnunet_dataset_json', type=str, default=None)
-    parser.add_argument('--nnunet_checkpoint', type=str, default=None)
-    parser.add_argument('--nnunet_configuration', type=str, default='3d_fullres')
     
     # DATA SPLIT PARAMETERS
     parser.add_argument('--data_split_mode', type=str, default='fix', choices=['random', 'fix'])
@@ -101,18 +83,6 @@ def load_config():
     config = parser.parse_args()
     
     config.img_size = parse_img_size(config.img_size)
-    
-    # nnUNet 경로 자동 설정
-    if config.model_type == 'nnunet':
-        nnunet_paths = setup_nnunet_path(config.nnunet_config)
-        
-        # 사용자가 직접 지정하지 않은 경우만 자동 설정
-        if config.nnunet_plans_file is None:
-            config.nnunet_plans_file = nnunet_paths['plans_file']
-        if config.nnunet_dataset_json is None:
-            config.nnunet_dataset_json = nnunet_paths['dataset_json']
-        if config.nnunet_checkpoint is None:
-            config.nnunet_checkpoint = nnunet_paths['checkpoint']
     
     if config.writer_comment is None:
         config.writer_comment = generate_writer_comment(config.model_type, config.img_size)

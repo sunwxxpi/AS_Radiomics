@@ -1,4 +1,5 @@
 import os
+import sys
 import torch
 import torch.nn as nn
 import numpy as np
@@ -11,6 +12,12 @@ from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, classifi
 from dl_cls_model import CustomModel, nnUNetClassificationModel
 from dl_cls_config import load_config
 from dl_cls_cam import generate_cam_for_sample
+
+# 상위 디렉토리의 config.py import
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+from config import Config
 
 
 def plot_confusion_matrix(conf_matrix_raw, class_names, accuracy, f1, auc_score, ap_score, output_path):
@@ -48,15 +55,16 @@ def plot_confusion_matrix(conf_matrix_raw, class_names, accuracy, f1, auc_score,
 def load_model(model_path, config):
     """설정에 따라 모델 로드 및 DataParallel 적용"""
     if config.model_type == 'nnunet':
-        encoder_config = {
-            'plans_file': config.nnunet_plans_file,
-            'dataset_json_file': config.nnunet_dataset_json,
-            'checkpoint_file': config.nnunet_checkpoint,
-            'configuration': config.nnunet_configuration
-        }
+        # config.py의 DL_NNUNET_CONFIG 사용
+        encoder_config = Config.DL_NNUNET_CONFIG.copy()
         model = nnUNetClassificationModel(num_classes=config.num_classes, pretrained_encoder_path=encoder_config)
+        print(f"✓ Using nnUNet encoder model with {config.num_classes} classes")
+        print(f"  Plans file: {encoder_config.get('plans_file')}")
+        print(f"  Dataset JSON: {encoder_config.get('dataset_json_file')}")
+        print(f"  Checkpoint: {encoder_config.get('checkpoint_file')}\n")
     else:
         model = CustomModel(num_classes=config.num_classes)
+        print(f"✓ Using custom MONAI ResNet50 model with {config.num_classes} classes\n")
     
     model.load_state_dict(torch.load(model_path))
     if torch.cuda.device_count() > 1:
@@ -93,8 +101,9 @@ def evaluate_single_fold(labels, probs, class_names, config, fold_number):
     class_report = classification_report(labels, preds, target_names=class_names)
     conf_matrix = confusion_matrix(labels, preds)
 
-    print(f'Fold {fold_number} Results')
+    print(f'\n=== Fold {fold_number} Results ===')
     print(f'Accuracy: {accuracy:.4f} | F1: {f1:.4f} | AUC: {auc:.4f} | AP: {ap:.4f}')
+    print(f'\nClassification Report:')
     print(class_report)
 
     # 혼동행렬 시각화 저장
@@ -118,8 +127,9 @@ def evaluate_ensemble(all_labels, all_probs, class_names, config):
         class_report = classification_report(all_labels, ensemble_preds, target_names=class_names)
         conf_matrix = confusion_matrix(all_labels, ensemble_preds)
 
-        print(f'{voting_type} Results')
+        print(f'\n=== {voting_type} Ensemble Results ===')
         print(f'Accuracy: {accuracy:.4f} | F1: {f1:.4f} | AUC: {auc:.4f} | AP: {ap:.4f}')
+        print(f'\nClassification Report:')
         print(class_report)
 
         # 앙상블 혼동행렬 저장
