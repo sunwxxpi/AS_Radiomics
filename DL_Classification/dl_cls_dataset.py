@@ -145,7 +145,7 @@ def prepare_as_data(data_split_mode='fix', data_split_random_state=42, test_size
     
     print(f"이미지 파일 수집 중...")
     print(f"  Train 이미지 디렉토리: {Config.IMAGE_TR_DIR}")
-    print(f"  Val 이미지 디렉토리: {Config.IMAGE_VAL_DIR}")
+    print(f"  Val 이미지 디렉토리: {Config.IMAGE_VAL_DIR}\n")
     
     # 모든 디렉토리에서 데이터 수집
     all_files, all_labels = [], []
