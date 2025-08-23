@@ -61,7 +61,7 @@ def load_config():
     # DATA SPLIT PARAMETERS
     parser.add_argument('--data_split_mode', type=str, default='fix', choices=['random', 'fix'])
     parser.add_argument('--data_split_random_state', type=int, default=42)
-    parser.add_argument('--test_size_ratio', type=float, default=0.4)
+    parser.add_argument('--test_size_ratio', type=float, default=0.2)
         
     # LEARNING RATE PARAMETERS
     parser.add_argument('--loss_function', type=str, default='CE')

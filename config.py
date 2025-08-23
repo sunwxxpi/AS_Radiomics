@@ -6,7 +6,6 @@ class Config:
     
     # 경로 설정
     BASE_DIR = '/home/psw/AVS-Diagnosis/Dataset001_KMU_Cardiac_AVC'
-    # BASE_DIR = '/home/psw/AVS-Diagnosis/Dataset002_KMU_Chest_AVC'
     LABEL_FILE = './data/AS_CRF_radiomics.csv'
     BASE_OUTPUT_DIR = './radiomics_analysis_results'
     
@@ -18,13 +17,13 @@ class Config:
     # 데이터 분할 설정
     DATA_SPLIT_MODE = 'fix'    # 분할 모드: 'random' (병합 후 랜덤 분할) 또는 'fix' (디렉토리 기반 고정 분할)
     DATA_SPLIT_RANDOM_STATE = 42  # 데이터 분할을 위한 랜덤 시드 (random 모드에서만 사용)
-    TEST_SIZE_RATIO = 0.4         # 테스트 데이터 비율 (random 모드에서만 사용, 0.0 ~ 1.0)
+    TEST_SIZE_RATIO = 0.2         # 테스트 데이터 비율 (random 모드에서만 사용, 0.0 ~ 1.0)
     
     # 분류 모드 설정 (binary 또는 multi)
     CLASSIFICATION_MODE = 'multi'  # 기본값은 multi 분류
     
     # DL Embedding 특징 설정
-    ENABLE_DL_EMBEDDING = True          # DL embedding 특징 사용 여부
+    ENABLE_DL_EMBEDDING = False          # DL embedding 특징 사용 여부
 
     DL_MODEL_TYPE = 'nnunet'            # 'custom' 또는 'nnunet'
     DL_IMG_SIZE = (32, 384, 320)        # DL 모델 입력 이미지 크기 (D, H, W) / nnUNet : (16, 112, 128), (32, 384, 320), Med3D : (56, 448, 448)
@@ -43,7 +42,7 @@ class Config:
     }
     
     # Dilation 설정
-    ENABLE_DILATION = True   # Dilation 사용 여부
+    ENABLE_DILATION = False   # Dilation 사용 여부
     DILATION_ITERATIONS = 1   # Dilation 반복 횟수
     
     @classmethod
