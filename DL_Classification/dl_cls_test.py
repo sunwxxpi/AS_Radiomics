@@ -58,10 +58,12 @@ def load_model(model_path, config):
         # config.py의 DL_NNUNET_CONFIG 사용
         encoder_config = Config.DL_NNUNET_CONFIG.copy()
         model = nnUNetClassificationModel(num_classes=config.num_classes, pretrained_encoder_path=encoder_config)
-        print(f"✓ Using nnUNet encoder model with {config.num_classes} classes")
-        print(f"  Plans file: {encoder_config.get('plans_file')}")
+        print(f"  Plans file (arch): {encoder_config.get('plans_file_arch')}")
+        print(f"  Configuration: {encoder_config.get('configuration')}")
         print(f"  Dataset JSON: {encoder_config.get('dataset_json_file')}")
         print(f"  Checkpoint: {encoder_config.get('checkpoint_file')}\n")
+        print(f"  Plans file (norm): {encoder_config.get('plans_file_norm')}")
+        print(f"✓ Using nnUNet encoder model with {config.num_classes} classes")
     else:
         model = CustomModel(num_classes=config.num_classes)
         print(f"✓ Using custom MONAI ResNet50 model with {config.num_classes} classes\n")

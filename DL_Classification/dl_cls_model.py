@@ -90,7 +90,7 @@ class nnUNetClassificationModel(nn.Module):
     
     def _load_pretrained_backbone(self, encoder_config):
         """Load nnUNet backbone (with or without pretrained weights)"""
-        plans_file = encoder_config.get('plans_file')
+        plans_file_arch = encoder_config.get('plans_file_arch')
         dataset_json_file = encoder_config.get('dataset_json_file')
         checkpoint_file = encoder_config.get('checkpoint_file')
         configuration = encoder_config.get('configuration')
@@ -100,7 +100,7 @@ class nnUNetClassificationModel(nn.Module):
             dataset_json = json.load(f)
 
         # PlansManager 및 ConfigurationManager 로드
-        plans_manager = PlansManager(plans_file)
+        plans_manager = PlansManager(plans_file_arch)
         config_manager = plans_manager.get_configuration(configuration)
         label_manager = plans_manager.get_label_manager(dataset_json)
 

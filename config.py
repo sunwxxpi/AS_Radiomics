@@ -35,10 +35,11 @@ class Config:
     
     # nnUNet 관련 설정 (DL_MODEL_TYPE이 'nnunet'인 경우)
     DL_NNUNET_CONFIG = {
-        'plans_file': './DL_Classification/nnUNet/Dataset001_COCA/nnUNetResEncUNetLPlans.json',
-        'dataset_json_file': './DL_Classification/nnUNet/Dataset001_COCA/dataset.json',
-        'checkpoint_file': './DL_Classification/nnUNet/Dataset001_COCA/checkpoint_final.pth',
-        'configuration': '3d_fullres'
+        'plans_file_arch': './DL_Classification/nnUNet/COCA_nnUNetResEncUNetLPlans.json',
+        'configuration': '3d_fullres',
+        'dataset_json_file': './DL_Classification/nnUNet/COCA_dataset.json',
+        'checkpoint_file': './DL_Classification/nnUNet/COCA_checkpoint_final.pth',
+        'plans_file_norm': './DL_Classification/nnUNet/AVC_nnUNetResEncUNetLPlans.json'
     }
     
     # Dilation 설정

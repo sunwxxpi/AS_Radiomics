@@ -300,9 +300,9 @@ def get_as_dataset(img_size, mode='train', data_split_mode='fix', data_split_ran
     # nnUNet plans 파일에서 intensity properties 로드 시도
     intensity_props = None
     if hasattr(Config, 'DL_NNUNET_CONFIG') and Config.DL_NNUNET_CONFIG:
-        plans_file = Config.DL_NNUNET_CONFIG.get('plans_file')
-        if plans_file:
-            intensity_props = load_intensity_properties_from_plans(plans_file)
+        plans_file_norm = Config.DL_NNUNET_CONFIG.get('plans_file_norm')
+        if plans_file_norm:
+            intensity_props = load_intensity_properties_from_plans(plans_file_norm)
     
     # Fallback으로 기본값 사용
     if intensity_props is None:
