@@ -5,8 +5,8 @@ class Config:
     """프로젝트 설정을 관리하는 클래스"""
     
     # 경로 설정
-    BASE_DIR = '/home/psw/AVS-Diagnosis/Dataset001_KMU_Cardiac_AVC'
-    LABEL_FILE = './data/AS_CRF_radiomics.csv'
+    BASE_DIR = '/home/psw/AVS-Diagnosis/Dataset003_total'
+    LABEL_FILE = './data/AS_CRF.csv'
     BASE_OUTPUT_DIR = './radiomics_analysis_results'
     
     IMAGE_TR_DIR = os.path.join(BASE_DIR, 'imagesTr')
