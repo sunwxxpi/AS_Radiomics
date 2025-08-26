@@ -199,6 +199,26 @@ def train_phase(config, model, train_loader, val_loader, criterion, optimizer, l
     return model
 
 
+def calculate_class_weights(data_loader, num_classes):
+    """학습 데이터셋의 클래스별 분포를 기반으로 가중치를 자동 계산"""
+    class_counts = torch.zeros(num_classes)
+    
+    # 전체 데이터에서 클래스별 개수 계산
+    for batch in data_loader:
+        labels = batch['labels']
+        for label in labels:
+            class_counts[label] += 1
+    
+    # 역가중치 계산 (전체 샘플 수 / (클래스 수 × 클래스별 샘플 수))
+    total_samples = class_counts.sum()
+    weights = total_samples / (num_classes * class_counts)
+    
+    # 가중치가 inf가 되는 경우 방지
+    weights = torch.where(class_counts == 0, torch.tensor(1.0), weights)
+    
+    return weights
+
+
 def train(config, train_loader, val_loader, fold):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -209,9 +229,10 @@ def train(config, train_loader, val_loader, fold):
         model = nn.DataParallel(model)
     model = model.to(device)
 
-    # LOSS FUNCTION
-    weight = torch.tensor([1.0/0.209, 1.0/0.096, 1.0/0.696], dtype=torch.float).to(device)
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.1, weight=weight).to(device) if config.loss_function == 'CE' else None
+    # LOSS FUNCTION - 자동 가중치 계산
+    weights = calculate_class_weights(train_loader, config.num_classes).to(device)
+    print(f"Calculated weights for CrossEntropyLoss: {weights.cpu().numpy()}\n")
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1, weight=weights).to(device) if config.loss_function == 'CE' else None
 
     # TensorBoard WRITER
     writer = SummaryWriter(log_dir=f'./DL_Classification/logs/{args.writer_comment}/{str(fold)}')
