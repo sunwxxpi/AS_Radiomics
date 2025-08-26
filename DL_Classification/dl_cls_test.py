@@ -213,6 +213,7 @@ def main():
     if config.data_split_mode == 'random':
         print(f"  - 테스트 데이터 비율: {config.test_size_ratio}")
         print(f"  - 랜덤 시드: {config.data_split_random_state}")
+    print()
 
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=6)
 

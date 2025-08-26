@@ -346,6 +346,7 @@ if __name__ == '__main__':
     if args.data_split_mode == 'random':
         print(f"  - 테스트 데이터 비율: {args.test_size_ratio}")
         print(f"  - 랜덤 시드: {args.data_split_random_state}")
+    print()
 
     print(vars(args))
     args_path = os.path.join(args.model_path, args.writer_comment)

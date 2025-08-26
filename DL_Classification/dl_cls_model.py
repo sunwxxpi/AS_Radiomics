@@ -169,9 +169,9 @@ def create_model(config):
         print(f"  Plans file (arch): {encoder_config.get('plans_file_arch')}")
         print(f"  Configuration: {encoder_config.get('configuration')}")
         print(f"  Dataset JSON: {encoder_config.get('dataset_json_file')}")
-        print(f"  Checkpoint: {encoder_config.get('checkpoint_file')}\n")
+        print(f"  Checkpoint: {encoder_config.get('checkpoint_file')}")
         print(f"  Plans file (norm): {encoder_config.get('plans_file_norm')}")
-        print(f"✓ Using nnUNet encoder model with {config.num_classes} classes")
+        print(f"✓ Using nnUNet encoder model with {config.num_classes} classes\n")
     else:
         model = CustomModel(num_classes=config.num_classes)
         print(f"✓ Using custom MONAI ResNet50 model with {config.num_classes} classes\n")
