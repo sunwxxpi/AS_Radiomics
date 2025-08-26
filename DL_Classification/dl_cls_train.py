@@ -1,5 +1,4 @@
 import os
-import sys
 import random
 import math
 import numpy as np
@@ -11,14 +10,8 @@ from sklearn.model_selection import StratifiedKFold
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 from dl_cls_config import load_config
-from dl_cls_model import CustomModel, nnUNetClassificationModel
+from dl_cls_model import create_model
 from dl_cls_valid import validate
-
-# 상위 디렉토리의 config.py import
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
-from config import Config
 
 
 def seed_torch(seed=1):
@@ -210,19 +203,7 @@ def train(config, train_loader, val_loader, fold):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # MODEL
-    if config.model_type == 'nnunet':
-        # config.py의 DL_NNUNET_CONFIG 사용
-        encoder_config = Config.DL_NNUNET_CONFIG.copy()
-        model = nnUNetClassificationModel(num_classes=config.num_classes, pretrained_encoder_path=encoder_config)
-        print(f"  Plans file (arch): {encoder_config.get('plans_file_arch')}")
-        print(f"  Configuration: {encoder_config.get('configuration')}")
-        print(f"  Dataset JSON: {encoder_config.get('dataset_json_file')}")
-        print(f"  Checkpoint: {encoder_config.get('checkpoint_file')}\n")
-        print(f"  Plans file (norm): {encoder_config.get('plans_file_norm')}")
-        print(f"✓ Using nnUNet encoder model with {config.num_classes} classes")
-    else:
-        model = CustomModel(num_classes=config.num_classes)
-        print(f"✓ Using custom MONAI ResNet50 model with {config.num_classes} classes\n")
+    model = create_model(config)
     
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)

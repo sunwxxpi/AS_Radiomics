@@ -1,11 +1,17 @@
 import os
+import sys
 import json
 import torch
 import torch.nn as nn
 import monai
 from nnunetv2.utilities.plans_handling.plans_handler import PlansManager
 from nnunetv2.utilities.get_network_from_plans import get_network_from_plans
-    
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
+from config import Config
 
 class CustomModel(nn.Module):
     def __init__(self, num_classes=2):
@@ -153,3 +159,21 @@ class nnUNetClassificationModel(nn.Module):
         logits = self.classifier(features)
         
         return logits
+
+
+def create_model(config):
+    if config.model_type == 'nnunet':
+        # config.py의 DL_NNUNET_CONFIG 사용
+        encoder_config = Config.DL_NNUNET_CONFIG.copy()
+        model = nnUNetClassificationModel(num_classes=config.num_classes, pretrained_encoder_path=encoder_config)
+        print(f"  Plans file (arch): {encoder_config.get('plans_file_arch')}")
+        print(f"  Configuration: {encoder_config.get('configuration')}")
+        print(f"  Dataset JSON: {encoder_config.get('dataset_json_file')}")
+        print(f"  Checkpoint: {encoder_config.get('checkpoint_file')}\n")
+        print(f"  Plans file (norm): {encoder_config.get('plans_file_norm')}")
+        print(f"✓ Using nnUNet encoder model with {config.num_classes} classes")
+    else:
+        model = CustomModel(num_classes=config.num_classes)
+        print(f"✓ Using custom MONAI ResNet50 model with {config.num_classes} classes\n")
+
+    return model

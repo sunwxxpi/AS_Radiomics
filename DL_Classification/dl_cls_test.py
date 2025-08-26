@@ -1,5 +1,4 @@
 import os
-import sys
 import torch
 import torch.nn as nn
 import numpy as np
@@ -9,15 +8,9 @@ import dl_cls_dataset
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, classification_report, roc_auc_score, average_precision_score
-from dl_cls_model import CustomModel, nnUNetClassificationModel
+from dl_cls_model import create_model
 from dl_cls_config import load_config
 from dl_cls_cam import generate_cam_for_sample
-
-# 상위 디렉토리의 config.py import
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
-from config import Config
 
 
 def plot_confusion_matrix(conf_matrix_raw, class_names, accuracy, f1, auc_score, ap_score, output_path):
@@ -50,29 +43,6 @@ def plot_confusion_matrix(conf_matrix_raw, class_names, accuracy, f1, auc_score,
     
     plt.savefig(output_path, dpi=200)
     plt.close()
-
-
-def load_model(model_path, config):
-    """설정에 따라 모델 로드 및 DataParallel 적용"""
-    if config.model_type == 'nnunet':
-        # config.py의 DL_NNUNET_CONFIG 사용
-        encoder_config = Config.DL_NNUNET_CONFIG.copy()
-        model = nnUNetClassificationModel(num_classes=config.num_classes, pretrained_encoder_path=encoder_config)
-        print(f"  Plans file (arch): {encoder_config.get('plans_file_arch')}")
-        print(f"  Configuration: {encoder_config.get('configuration')}")
-        print(f"  Dataset JSON: {encoder_config.get('dataset_json_file')}")
-        print(f"  Checkpoint: {encoder_config.get('checkpoint_file')}\n")
-        print(f"  Plans file (norm): {encoder_config.get('plans_file_norm')}")
-        print(f"✓ Using nnUNet encoder model with {config.num_classes} classes")
-    else:
-        model = CustomModel(num_classes=config.num_classes)
-        print(f"✓ Using custom MONAI ResNet50 model with {config.num_classes} classes\n")
-    
-    model.load_state_dict(torch.load(model_path))
-    if torch.cuda.device_count() > 1:
-        model = nn.DataParallel(model)
-    
-    return model
 
 
 def calculate_metrics(labels, probs, class_names):
@@ -264,7 +234,13 @@ def main():
             print(f"Fold {fold} 모델 파일 없음. 건너뜀.")
             continue
         
-        model = load_model(model_path, config).to(device)
+        # MODEL
+        model = create_model(config)
+        model.load_state_dict(torch.load(model_path))
+        
+        if torch.cuda.device_count() > 1:
+            model = nn.DataParallel(model)
+        model = model.to(device)
         
         # fold 추론 및 CAM 생성
         fold_labels, fold_probs = evaluate_fold_and_generate_cam(
