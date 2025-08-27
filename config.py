@@ -165,7 +165,7 @@ class Config:
         elif 'Cardiac' in cls.BASE_DIR:
             return 'cardiac'
         else:
-            return 'unknown'
+            return cls.BASE_DIR.split('_')[1]
     
     @classmethod
     def ensure_output_dir(cls):
