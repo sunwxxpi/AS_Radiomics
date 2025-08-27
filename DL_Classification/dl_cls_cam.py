@@ -120,11 +120,11 @@ class CAMVisualizer:
         self.alpha = alpha
         self.num_key_slices = num_key_slices
 
-    def run_visualizations(self, image, cam, filename_prefix, target_class, class_names):
+    def run_visualizations(self, image, cam, filename_prefix, target_class, class_names, true_class=None):
         """모든 시각화 실행 및 저장"""
-        self._save_key_slices_grid(image, cam, filename_prefix, target_class, class_names)
-        self._save_all_slices_grid(image, cam, filename_prefix, target_class, class_names)
-        self._save_3d_projection(image, cam, filename_prefix, target_class, class_names)
+        self._save_key_slices_grid(image, cam, filename_prefix, target_class, class_names, true_class)
+        self._save_all_slices_grid(image, cam, filename_prefix, target_class, class_names, true_class)
+        self._save_3d_projection(image, cam, filename_prefix, target_class, class_names, true_class)
 
     def _create_slice_overlay(self, image_slice, cam_slice):
         """단일 2D 슬라이스에 이미지와 CAM 오버레이"""
@@ -140,7 +140,7 @@ class CAMVisualizer:
         fig.savefig(save_path, dpi=200, bbox_inches='tight', pad_inches=0.1)
         plt.close(fig)
 
-    def _save_key_slices_grid(self, image, cam, filename_prefix, target_class, class_names):
+    def _save_key_slices_grid(self, image, cam, filename_prefix, target_class, class_names, true_class=None):
         """CAM 활성화가 높은 주요 슬라이스 격자 이미지 저장"""
         depth = image.shape[0]
         
@@ -182,11 +182,15 @@ class CAMVisualizer:
                 if base_idx + j < len(axes):
                     axes[base_idx + j].axis('off')
         
-        title = f'Key Slices (Top {len(key_indices)}) - Predicted: {class_names[target_class]}'
+        title_parts = [f'Key Slices (Top {len(key_indices)})']
+        if true_class is not None:
+            title_parts.append(f'True: {class_names[true_class]}')
+        title_parts.append(f'Pred: {class_names[target_class]}')
+        title = ' - '.join(title_parts)
         save_path = os.path.join(self.save_dir, f'{filename_prefix}_key_slices.png')
         self._save_plot(fig, title, save_path)
 
-    def _save_all_slices_grid(self, image, cam, filename_prefix, target_class, class_names):
+    def _save_all_slices_grid(self, image, cam, filename_prefix, target_class, class_names, true_class=None):
         """모든 슬라이스에 대한 격자 이미지를 저장"""
         depth = image.shape[0]
         slice_indices = list(range(depth))
@@ -221,11 +225,15 @@ class CAMVisualizer:
                 if base_idx + j < len(axes):
                     axes[base_idx + j].axis('off')
         
-        title = f'All Slices - Predicted: {class_names[target_class]}'
+        title_parts = ['All Slices']
+        if true_class is not None:
+            title_parts.append(f'True: {class_names[true_class]}')
+        title_parts.append(f'Pred: {class_names[target_class]}')
+        title = ' - '.join(title_parts)
         save_path = os.path.join(self.save_dir, f'{filename_prefix}_all_slices.png')
         self._save_plot(fig, title, save_path)
 
-    def _save_3d_projection(self, image, cam, filename_prefix, target_class, class_names):
+    def _save_3d_projection(self, image, cam, filename_prefix, target_class, class_names, true_class=None):
         """3D 볼륨의 2D 투영(MIP) 이미지 저장"""
         views = {'Axial': 0, 'Coronal': 1, 'Sagittal': 2}
         fig, axes = plt.subplots(2, 3, figsize=(15, 10))
@@ -258,12 +266,16 @@ class CAMVisualizer:
         for ax in axes.flatten(): 
             ax.axis('off')
 
-        title = f'3D Maximum Intensity Projection - Predicted: {class_names[target_class]}'
+        title_parts = ['3D Maximum Intensity Projection']
+        if true_class is not None:
+            title_parts.append(f'True: {class_names[true_class]}')
+        title_parts.append(f'Pred: {class_names[target_class]}')
+        title = ' - '.join(title_parts)
         save_path = os.path.join(self.save_dir, f'{filename_prefix}_3d_projection.png')
         self._save_plot(fig, title, save_path)
 
 
-def generate_cam_for_sample(model, image_tensor, target_class, class_names, save_dir, sample_name):
+def generate_cam_for_sample(model, image_tensor, target_class, class_names, save_dir, sample_name, true_label=None):
     """단일 샘플에 대한 Grad-CAM 생성 및 시각화"""
     original_model_mode = model.training
     gradcam = GradCAM(model)
@@ -287,7 +299,8 @@ def generate_cam_for_sample(model, image_tensor, target_class, class_names, save
             cam=cam_resized,
             filename_prefix=sample_name,
             target_class=predicted_class,
-            class_names=class_names
+            class_names=class_names,
+            true_class=true_label
         )
         return cam_resized, predicted_class
 
