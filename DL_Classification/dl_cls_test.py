@@ -146,17 +146,14 @@ def generate_cam_for_samples(model, cam_data_list, class_names, cam_save_dir):
     print(f"--- CAM 생성 완료: {successful_count}/{len(cam_data_list)}개 성공 ---")
 
 
-def evaluate_fold_and_generate_cam(config, model, test_loader, class_names, fold_number, save_cam=True, max_cam_samples=10):
-    """단일 fold 추론 실행 및 선택적 CAM 생성"""
-    device = next(model.parameters()).device
+def run_inference(model, test_loader, device, fold_number, max_cam_samples=10):
+    """모델 추론을 실행하고, 결과 및 CAM 생성용 데이터를 반환"""
     all_probs = []
     all_labels = []
     cam_data_list = []
-
-    model.eval()
     
+    model.eval()
     try:
-        # 추론 루프: 예측값 계산 및 CAM용 데이터 수집
         with torch.no_grad():
             for pack in tqdm(test_loader, desc=f'Testing Fold {fold_number}', unit='batch'):
                 images = pack['imgs'].to(device)
@@ -170,27 +167,19 @@ def evaluate_fold_and_generate_cam(config, model, test_loader, class_names, fold
                 all_labels.extend(labels.cpu().numpy())
                 
                 # CAM 생성용 샘플 데이터 수집
-                if save_cam and len(cam_data_list) < max_cam_samples:
+                if len(cam_data_list) < max_cam_samples:
                     for i in range(images.shape[0]):
                         if len(cam_data_list) >= max_cam_samples:
                             break
-                        
                         cam_data_list.append({
                             'image_tensor': images[i].clone().cpu(),
                             'true_label': labels[i].item(),
                             'sample_name': names[i]
                         })
-
-        # CAM 시각화 생성
-        if save_cam and cam_data_list:
-            cam_save_dir = os.path.join('./DL_Classification', 'results', config.writer_comment, 'cam_visualization', f'fold_{fold_number}')
-            os.makedirs(cam_save_dir, exist_ok=True)
-            generate_cam_for_samples(model, cam_data_list, class_names, cam_save_dir)
-
     finally:
         torch.cuda.empty_cache()
 
-    return all_labels, np.concatenate(all_probs, axis=0)
+    return all_labels, np.concatenate(all_probs, axis=0), cam_data_list
 
 
 def main():
@@ -246,22 +235,28 @@ def main():
             model = nn.DataParallel(model)
         model = model.to(device)
         
-        # fold 추론 및 CAM 생성
-        fold_labels, fold_probs = evaluate_fold_and_generate_cam(
-            config, model, test_loader, class_names, fold,
-            save_cam=should_save_cam, max_cam_samples=max_samples_for_cam
+        # 1. 추론 실행 (결과 및 CAM 샘플 데이터 확보)
+        fold_labels, fold_probs, cam_samples = run_inference(
+            model, test_loader, device, fold, max_cam_samples=max_samples_for_cam
         )
         
+        # 2. Confusion Matrix 생성 및 단일 Fold 평가
         if fold == 1:
             all_fold_labels = fold_labels
-        
         all_fold_probs.append(fold_probs)
         evaluate_single_fold(fold_labels, fold_probs, class_names, config, fold)
+        print(f"Fold {fold} Confusion Matrix 및 평가 완료.")
+
+        # 3. CAM 이미지 생성
+        if should_save_cam and cam_samples:
+            cam_save_dir = os.path.join('./DL_Classification', 'results', config.writer_comment, 'cam_visualization', f'fold_{fold}')
+            os.makedirs(cam_save_dir, exist_ok=True)
+            generate_cam_for_samples(model, cam_samples, class_names, cam_save_dir)
 
     # 앙상블 평가
     if all_fold_probs:
         print(f"\n{'='*20} 앙상블 평가 시작 {'='*20}")
-        evaluate_ensemble(all_fold_labels, all_fold_probs, class_names, config)
+        evaluate_ensemble(all_fold_labels, np.array(all_fold_probs), class_names, config)
 
 
 if __name__ == '__main__':
