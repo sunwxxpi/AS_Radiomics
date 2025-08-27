@@ -20,7 +20,8 @@ class GradCAM:
     def __init__(self, model, target_layer_name=None):
         """GradCAM 초기화 및 Hook 등록"""
         self.model = model
-        self.model.train()  # 그래디언트 계산용
+        self.original_mode = self.model.training  # 모델의 기존 상태 저장
+        self.model.train()  # 그래디언트 계산을 위해 train 모드로 전환
         
         self.gradients = None
         self.activations = None
@@ -84,7 +85,7 @@ class GradCAM:
         
         self.model.zero_grad()
         class_score = output[0, target_class]
-        class_score.backward(retain_graph=True)
+        class_score.backward()
         
         if self.gradients is None or self.activations is None:
             raise RuntimeError("Hook을 통해 그래디언트나 활성맵이 캡처되지 않았습니다.")
@@ -107,7 +108,7 @@ class GradCAM:
         """Hook 제거 및 모델 모드 복원"""
         for handle in self.hook_handles:
             handle.remove()
-        self.model.eval()
+        self.model.train(self.original_mode) # 저장했던 원래 상태로 모델 복원
 
 
 class CAMVisualizer:
