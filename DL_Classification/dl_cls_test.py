@@ -198,17 +198,20 @@ def main():
     config = load_config()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # 테스트 데이터셋 로드 (분할 설정 적용)
-    print("테스트 데이터셋 로딩...")
-    test_dataset, _, _, class_names = dl_cls_dataset.get_as_dataset(
+    # AS Test 데이터셋 로드 (분할 설정 적용)
+    print("AS Test 데이터셋 로딩...")
+    test_dataset, label_to_idx, _, class_names = dl_cls_dataset.get_as_dataset(
         config.img_size, 
         mode='test',
         data_split_mode=config.data_split_mode,
         data_split_random_state=config.data_split_random_state,
         test_size_ratio=config.test_size_ratio
     )
+    
+    # 실제 클래스 수로 업데이트
     config.num_classes = len(class_names)
-    print(f"데이터셋 로드 완료. 클래스 수: {config.num_classes}")
+    print(f"AS Test 데이터셋 로드 완료. 클래스 수: {config.num_classes}")
+    print(f"클래스 매핑: {label_to_idx}")
     print(f"데이터 분할 모드: {config.data_split_mode}")
     if config.data_split_mode == 'random':
         print(f"  - 테스트 데이터 비율: {config.test_size_ratio}")
