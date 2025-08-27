@@ -168,12 +168,12 @@ class CAMVisualizer:
             if i < num_slices and base_idx + 2 < len(axes):
                 slice_idx = key_indices[i]
                 
-                # 원본, CAM, 오버레이 이미지 표시
-                axes[base_idx].imshow(image[slice_idx], cmap='gray')
+                # 원본, CAM, 오버레이 이미지 표시 (좌우반전 적용)
+                axes[base_idx].imshow(np.fliplr(image[slice_idx]), cmap='gray')
                 axes[base_idx].set_title(f'Original {slice_idx}', fontsize=8)
-                axes[base_idx+1].imshow(cam[slice_idx], cmap='jet', vmin=0, vmax=1)
+                axes[base_idx+1].imshow(np.fliplr(cam[slice_idx]), cmap='jet', vmin=0, vmax=1)
                 axes[base_idx+1].set_title(f'CAM {slice_idx}', fontsize=8)
-                overlay = self._create_slice_overlay(image[slice_idx], cam[slice_idx])
+                overlay = self._create_slice_overlay(np.fliplr(image[slice_idx]), np.fliplr(cam[slice_idx]))
                 axes[base_idx+2].imshow(overlay)
                 axes[base_idx+2].set_title(f'Overlay {slice_idx}', fontsize=8)
             
@@ -211,12 +211,12 @@ class CAMVisualizer:
             if i < num_slices and base_idx + 2 < len(axes):
                 slice_idx = slice_indices[i]
                 
-                # 원본, CAM, 오버레이 이미지 표시
-                axes[base_idx].imshow(image[slice_idx], cmap='gray')
+                # 원본, CAM, 오버레이 이미지 표시 (좌우반전 적용)
+                axes[base_idx].imshow(np.fliplr(image[slice_idx]), cmap='gray')
                 axes[base_idx].set_title(f'Original {slice_idx}', fontsize=8)
-                axes[base_idx+1].imshow(cam[slice_idx], cmap='jet', vmin=0, vmax=1)
+                axes[base_idx+1].imshow(np.fliplr(cam[slice_idx]), cmap='jet', vmin=0, vmax=1)
                 axes[base_idx+1].set_title(f'CAM {slice_idx}', fontsize=8)
-                overlay = self._create_slice_overlay(image[slice_idx], cam[slice_idx])
+                overlay = self._create_slice_overlay(np.fliplr(image[slice_idx]), np.fliplr(cam[slice_idx]))
                 axes[base_idx+2].imshow(overlay)
                 axes[base_idx+2].set_title(f'Overlay {slice_idx}', fontsize=8)
             
