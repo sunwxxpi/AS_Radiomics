@@ -215,7 +215,6 @@ def main():
 
     # CAM 설정
     should_save_cam = config.enable_cam
-    max_samples_for_cam = 20
     print(f"CAM 생성: {'활성화' if should_save_cam else '비활성화'}")
 
     # 각 fold 평가
@@ -237,7 +236,7 @@ def main():
         
         # 1. 추론 실행 (결과 및 CAM 샘플 데이터 확보)
         fold_labels, fold_probs, cam_samples = run_inference(
-            model, test_loader, device, fold, max_cam_samples=max_samples_for_cam
+            model, test_loader, device, fold, max_cam_samples=20
         )
         
         # 2. Confusion Matrix 생성 및 단일 Fold 평가
