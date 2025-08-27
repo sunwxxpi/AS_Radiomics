@@ -130,7 +130,8 @@ def generate_cam_for_samples(model, cam_data_list, class_names, cam_save_dir):
                 target_class=None,
                 class_names=class_names,
                 save_dir=cam_save_dir,
-                sample_name=f"{sample_name.replace('.nii.gz', '')}_true_{class_names[true_label]}"
+                sample_name=sample_name.replace('_0000.nii.gz', ''),
+                true_label=true_label
             )
             
             if cam_result and cam_result[0] is not None:
