@@ -1,8 +1,6 @@
 import os
 import sys
 import torch
-import numpy as np
-import nibabel as nib
 from monai.transforms import Compose, Resize
 
 sys.path.append('/home/psw/AS_Radiomics')
