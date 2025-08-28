@@ -91,10 +91,10 @@ class DLEmbeddingExtractor:
             self.full_model.to(self.device)
             self.full_model.eval()
             
-            print(f"    DL 모델 로딩 완료 (Device: {self.device}, Classes: {num_classes}, Embedding Dim: {self.embedding_dim})")
+            print(f"  DL 모델 로딩 완료 (Device: {self.device}, Classes: {num_classes}, Embedding Dim: {self.embedding_dim})")
             
         except Exception as e:
-            print(f"    ⚠️ 오류: DL 모델 로딩 실패 - {e}")
+            print(f"  ⚠️ 오류: DL 모델 로딩 실패 - {e}")
             self.full_model = None
     
     def _extract_num_classes_from_checkpoint(self, checkpoint):
@@ -108,7 +108,7 @@ class DLEmbeddingExtractor:
             if classifier_keys:
                 classifier_weight = state_dict[classifier_keys[0]]
                 num_classes = classifier_weight.shape[0]  # out_features
-                print(f"    Custom 모델에서 추출된 num_classes: {num_classes}")
+
                 return num_classes
             
             # net.fc.weight 형태의 키도 확인
@@ -116,7 +116,7 @@ class DLEmbeddingExtractor:
             if net_fc_keys:
                 fc_weight = state_dict[net_fc_keys[0]]
                 num_classes = fc_weight.shape[0]
-                print(f"    Custom 모델에서 추출된 num_classes (net.fc): {num_classes}")
+
                 return num_classes
         
         # nnUNet 모델의 경우
@@ -132,7 +132,7 @@ class DLEmbeddingExtractor:
                 if last_classifier_key:
                     classifier_weight = state_dict[last_classifier_key]
                     num_classes = classifier_weight.shape[0]
-                    print(f"    nnUNet 모델에서 추출된 num_classes: {num_classes}")
+
                     return num_classes
 
     def _map_state_dict_keys(self, state_dict):

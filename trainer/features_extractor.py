@@ -36,11 +36,11 @@ class RadiomicsExtractor:
                             nnunet_config=dl_nnunet_config,
                             img_size=Config.DL_IMG_SIZE
                         )
-                        print(f"  DL embedding 추출기 초기화 완료 - Fold {fold} (IMG SIZE: {Config.DL_IMG_SIZE})")
+                        print(f"  DL embedding 추출기 초기화 완료 - Fold {fold} (IMG SIZE: {Config.DL_IMG_SIZE})\n")
                     except Exception as e:
-                        print(f"  DL embedding 추출기 초기화 실패 - Fold {fold}: {e}")
+                        print(f"  DL embedding 추출기 초기화 실패 - Fold {fold}: {e}\n")
                 else:
-                    print(f"  경고: Fold {fold} 모델 파일을 찾을 수 없음: {model_path}")
+                    print(f"  경고: Fold {fold} 모델 파일을 찾을 수 없음: {model_path}\n")
         
         self._setup_logging()
     

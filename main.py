@@ -229,7 +229,7 @@ def main():
     # print("===== Binary 분류 모드로 파이프라인 실행 =====")
     # run_pipeline('binary')
     
-    print("\n\n===== Multi-class 분류 모드로 파이프라인 실행 =====")
+    print("===== Multi-class 분류 모드로 파이프라인 실행 =====")
     run_pipeline('multi')
 
 if __name__ == "__main__":
