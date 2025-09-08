@@ -8,8 +8,8 @@ radiomics_analysis_results/
 
 *.xlsx
 *.csv
+*.pth
 
 DL_Classification/logs/
 DL_Classification/weights/
 DL_Classification/results/
-DL_Classification/nnUNet/
