@@ -24,6 +24,7 @@ class Config:
 
     # 특징 융합 설정
     ENABLE_DL_EMBEDDING = False          # DL embedding 사용 여부
+    USE_ENSEMBLE = False                 # Soft Voting Ensemble 사용 여부
     USE_GATED_FUSION = False             # True: Gated Fusion, False: 일반 Concat
 
     # DL 모델 설정
@@ -193,6 +194,9 @@ class Config:
         dl_suffix = ""
         if cls.ENABLE_DL_EMBEDDING:
             dl_suffix = f"_dl{cls.DL_MODEL_TYPE}_{cls.IMG_SIZE_DEPTH}_{cls.IMG_SIZE_HEIGHT}_{cls.IMG_SIZE_WIDTH}"
+            # Ensemble 사용 시 _ensemble 접미사 추가
+            if cls.USE_ENSEMBLE:
+                dl_suffix += "_ensemble"
             # Gated fusion 사용 시 _gated 접미사 추가
             if cls.USE_GATED_FUSION:
                 dl_suffix += "_gated"
@@ -261,5 +265,6 @@ class Config:
                 print(f"사용 Fold: 전체 (1-5)")
             else:
                 print(f"사용 Fold: {cls.FOLD}")
+        print(f"Soft Voting Ensemble 사용: {cls.USE_ENSEMBLE}")
         print(f"CV 폴드 수: {cls.CV_FOLDS}")
         print("========================")

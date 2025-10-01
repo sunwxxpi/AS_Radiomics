@@ -15,6 +15,7 @@ from utils.file_handler import FileHandler
 from trainer.features_extractor import RadiomicsExtractor
 from trainer.train import ModelTrainer
 from gated_models import run_gated_fusion_analysis
+from utils.ensemble import run_ensemble_for_fold
 
 def run_pipeline():
     """Radiomics 분석 메인 파이프라인
@@ -32,6 +33,12 @@ def run_pipeline():
     try:
         print("--- Radiomics 분석 파이프라인 시작 ---\n")
 
+        # Ensemble 사전 검증
+        if Config.USE_ENSEMBLE and not Config.ENABLE_DL_EMBEDDING:
+            print("오류: Ensemble을 사용하려면 DL Embedding이 활성화되어야 합니다.")
+            print("config.py에서 ENABLE_DL_EMBEDDING = True로 설정해주세요.")
+            return
+        
         # Gated Fusion 사전 검증
         if Config.USE_GATED_FUSION and not Config.ENABLE_DL_EMBEDDING:
             print("오류: Gated Fusion을 사용하려면 DL Embedding이 활성화되어야 합니다.")
@@ -242,9 +249,34 @@ def run_fold_analysis(features_df, fold_name, mode, base_output_dir):
         print(f"\n  --- {fold_name} 결과 저장 ---")
         file_handler.save_prediction_results(prediction_results, 'test_cases_prediction_results.csv')
         file_handler.save_model_summary(results, 'model_validation_summary.csv')
-        
+
+        # 7. Ensemble 수행 (옵션)
+        if Config.USE_ENSEMBLE and Config.ENABLE_DL_EMBEDDING and fold_name != 'Radiomics_Only':
+            print(f"\n  --- {fold_name} Soft Voting Ensemble 수행 ---")
+            try:
+                # DL 결과 디렉토리 경로
+                dl_results_dir = f'./DL_Classification/results/{Config.DL_COMMENT_WRITER}'
+
+                # Ensemble 수행
+                run_ensemble_for_fold(
+                    fold=fold_name,
+                    dl_results_dir=dl_results_dir,
+                    radiomics_results_dir=fold_output_dir,
+                    classification_mode=mode,
+                    models=Config.CLASSIFICATION_MODELS,
+                    feature_selection_method=Config.FEATURE_SELECTION_METHOD
+                )
+
+                print(f"  {fold_name} Ensemble 완료!")
+                print(f"  결과: {os.path.join(fold_output_dir, 'ensemble', f'ensemble_results_fold_{fold_name}.csv')}")
+
+            except Exception as ensemble_error:
+                print(f"  {fold_name} Ensemble 중 오류 발생: {ensemble_error}")
+                import traceback
+                traceback.print_exc()
+
         print(f"  {fold_name} 분석 완료!")
-        
+
     except Exception as e:
         print(f"  {fold_name} 분석 중 오류 발생: {e}")
         import traceback
