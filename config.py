@@ -19,19 +19,19 @@ class Config:
     DATA_SPLIT_RANDOM_STATE = 42  # 데이터 분할을 위한 랜덤 시드 (random 모드에서만 사용)
     TEST_SIZE_RATIO = 0.2         # 테스트 데이터 비율 (random 모드에서만 사용, 0.0 ~ 1.0)
     
-    # 분류 모드 설정 (binary 또는 multi)
-    CLASSIFICATION_MODE = 'multi'  # 기본값은 multi 분류
-    
-    # DL Embedding 특징 설정
-    ENABLE_DL_EMBEDDING = False          # DL embedding 특징 사용 여부
+    # 분류 모드 설정
+    CLASSIFICATION_MODE = 'multi'       # 'binary' 또는 'multi'
 
-    DL_MODEL_TYPE = 'nnunet'            # 'custom' 또는 'nnunet'
-    DL_IMG_SIZE = (32, 384, 320)        # DL 모델 입력 이미지 크기 (D, H, W) / nnUNet : (32, 384, 320), Med3D : (56, 448, 448)
+    # 특징 융합 설정
+    ENABLE_DL_EMBEDDING = False          # DL embedding 사용 여부
+    USE_GATED_FUSION = False             # True: Gated Fusion, False: 일반 Concat
+
+    # DL 모델 설정
+    DL_MODEL_TYPE = 'nnunet'            # 'nnunet' 또는 'custom'
+    DL_IMG_SIZE = (32, 384, 320)        # 입력 이미지 크기 (D, H, W): nnUNet(32,384,320), Med3D(56,448,448)
     IMG_SIZE_DEPTH, IMG_SIZE_HEIGHT, IMG_SIZE_WIDTH = DL_IMG_SIZE
     DL_COMMENT_WRITER = f'{DL_MODEL_TYPE}_{IMG_SIZE_DEPTH}_{IMG_SIZE_HEIGHT}_{IMG_SIZE_WIDTH}'
-    FOLD = None                         # None이면 1~5 모든 fold 사용, 숫자면 해당 fold만 사용
-
-    DL_MODEL_PATH = f'./DL_Classification/weights/{DL_COMMENT_WRITER}/{FOLD}/best_model.pth'
+    FOLD = None                         # None: 전체 fold(1-5) 사용, 정수: 특정 fold만 사용
     
     # nnUNet 관련 설정 (DL_MODEL_TYPE이 'nnunet'인 경우)
     DL_NNUNET_CONFIG = {
@@ -48,9 +48,13 @@ class Config:
     
     @classmethod
     def get_dl_model_paths(cls):
-        """FOLD 설정에 따라 DL 모델 경로 딕셔너리 반환"""
+        """FOLD 설정에 따라 DL 모델 경로 딕셔너리 반환
+
+        Returns:
+            dict: {fold: model_path} 형태의 딕셔너리
+        """
         if cls.FOLD is None:
-            # 모든 fold (1~5) 사용
+            # 전체 fold (1-5) 사용
             return {
                 fold: f'./DL_Classification/weights/{cls.DL_COMMENT_WRITER}/{fold}/best_model.pth'
                 for fold in range(1, 6)
@@ -169,21 +173,31 @@ class Config:
     
     @classmethod
     def ensure_output_dir(cls):
-        """특징 선택 방법과 실행 시간, 분류 모드, dilation 설정, DL embedding에 따른 출력 디렉토리 생성"""
+        """실행 설정에 따른 출력 디렉토리 생성
+
+        디렉토리 구조: base/dataset_type/feature_method/mode/final_name
+        예시: radiomics_analysis_results/total/lasso/multi/dlnnunet_32_384_320_gated_20250930_123456/
+
+        Returns:
+            str: 생성된 출력 디렉토리 경로
+        """
         timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         mode_suffix = "binary" if cls.CLASSIFICATION_MODE == 'binary' else "multi"
-        
+
         # Dilation 정보 추가
         dilation_suffix = ""
         if cls.ENABLE_DILATION:
             dilation_suffix = f"_dil{cls.DILATION_ITERATIONS}"
-        
+
         # DL embedding 정보 추가
         dl_suffix = ""
         if cls.ENABLE_DL_EMBEDDING:
             dl_suffix = f"_dl{cls.DL_MODEL_TYPE}_{cls.IMG_SIZE_DEPTH}_{cls.IMG_SIZE_HEIGHT}_{cls.IMG_SIZE_WIDTH}"
-        
-        # DL과 dilation이 모두 비활성화된 경우 default 접두사 사용
+            # Gated fusion 사용 시 _gated 접미사 추가
+            if cls.USE_GATED_FUSION:
+                dl_suffix += "_gated"
+
+        # DL embedding과 Dilation이 모두 비활성화된 경우 default 접두사 사용
         if not cls.ENABLE_DL_EMBEDDING and not cls.ENABLE_DILATION:
             final_dir_name = f"default_{timestamp}"
         else:
@@ -239,7 +253,13 @@ class Config:
             print(f"Dilation 반복 횟수: {cls.DILATION_ITERATIONS}")
         print(f"DL Embedding 사용: {cls.ENABLE_DL_EMBEDDING}")
         if cls.ENABLE_DL_EMBEDDING:
+            fusion_type = "Gated Fusion" if cls.USE_GATED_FUSION else "일반 Concat"
+            print(f"융합 방식: {fusion_type}")
             print(f"DL 모델 타입: {cls.DL_MODEL_TYPE}")
-            print(f"DL 모델 경로: {cls.DL_MODEL_PATH}")
+            print(f"DL 이미지 크기: {cls.DL_IMG_SIZE}")
+            if cls.FOLD is None:
+                print(f"사용 Fold: 전체 (1-5)")
+            else:
+                print(f"사용 Fold: {cls.FOLD}")
         print(f"CV 폴드 수: {cls.CV_FOLDS}")
         print("========================")

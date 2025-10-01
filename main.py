@@ -14,23 +14,34 @@ from utils.plotter import ResultPlotter
 from utils.file_handler import FileHandler
 from trainer.features_extractor import RadiomicsExtractor
 from trainer.train import ModelTrainer
+from gated_models import run_gated_fusion_analysis
 
-def run_pipeline(mode):
-    """Multiple fold DL embedding을 지원하는 Radiomics 분석 파이프라인
-    
-    Radiomics는 한 번만 추출하고 각 fold의 DL embedding과 결합하여 독립 분석
+def run_pipeline():
+    """Radiomics 분석 메인 파이프라인
+
+    워크플로우:
+        1. Radiomics 특징 추출 (한 번만)
+        2. Fold별 DL embedding 추가
+        3. 특징 융합 (일반 Concat 또는 Gated Fusion)
+        4. 전통적 ML 분류기 학습 및 평가
     """
     # 설정 및 로깅 초기화
-    Config.CLASSIFICATION_MODE = mode
-    
     output_dir = Config.ensure_output_dir()
     logger = setup_logging(output_dir)
-    
+
     try:
-        print(f"--- Radiomics 분석 파이프라인 시작 (모드: {mode}) ---\n")
-        
+        print("--- Radiomics 분석 파이프라인 시작 ---\n")
+
+        # Gated Fusion 사전 검증
+        if Config.USE_GATED_FUSION and not Config.ENABLE_DL_EMBEDDING:
+            print("오류: Gated Fusion을 사용하려면 DL Embedding이 활성화되어야 합니다.")
+            print("config.py에서 ENABLE_DL_EMBEDDING = True로 설정해주세요.")
+            return
+
         # 설정 요약 출력
         Config.print_config_summary()
+
+        mode = Config.CLASSIFICATION_MODE
         
         # 1. 데이터 로딩
         print("\n--- 1. 데이터 로딩 ---")
@@ -151,22 +162,37 @@ def run_pipeline(mode):
         return logger
 
 def run_fold_analysis(features_df, fold_name, mode, base_output_dir):
-    """개별 fold에 대한 완전한 분석 파이프라인 실행
-    
-    데이터 분할 → 전처리 → 모델 학습 → 평가 → 시각화 → 결과 저장
+    """Fold별 전체 분석 파이프라인
+
+    프로세스:
+        1. 데이터 분할 (train/validation)
+        2. 특징 정규화 및 선택 (LASSO 등)
+        3. ML 분류기 학습 (LR, SVM, RF, GB, KNN, NB)
+        4. 성능 평가 및 시각화
+        5. 결과 저장
+
+    Args:
+        features_df (pd.DataFrame): Radiomics + DL features (또는 Gated Fused features)
+        fold_name (int or None): Fold 번호 (None이면 'Radiomics_Only')
+        mode (str): 'binary' 또는 'multi'
+        base_output_dir (str): 출력 디렉토리 경로
     """
     fold_name = fold_name if fold_name else 'Radiomics_Only'
-    
+
     print(f"\n  === {fold_name} 분석 실행 ===")
-    
+
     # fold별 독립 출력 디렉토리 생성 (fold_name이 'Radiomics_Only'이면 base_output_dir 사용)
     if fold_name != 'Radiomics_Only':
         fold_output_dir = os.path.join(base_output_dir, f"fold_{fold_name}")
         os.makedirs(fold_output_dir, exist_ok=True)
     else:
         fold_output_dir = base_output_dir
-    
+
     try:
+        # Gated fusion 사용 시 별도 처리
+        if Config.USE_GATED_FUSION:
+            run_gated_fusion_analysis(features_df, fold_name, mode, fold_output_dir)
+            return
         # case_id를 인덱스로 변환 (전처리 호환성)
         if 'case_id' in features_df.columns:
             features_df_processed = features_df.set_index('case_id')
@@ -224,13 +250,5 @@ def run_fold_analysis(features_df, fold_name, mode, base_output_dir):
         import traceback
         traceback.print_exc()
 
-def main():
-    # 두 가지 모드로 파이프라인 실행
-    # print("===== Binary 분류 모드로 파이프라인 실행 =====")
-    # run_pipeline('binary')
-    
-    print("===== Multi-class 분류 모드로 파이프라인 실행 =====")
-    run_pipeline('multi')
-
 if __name__ == "__main__":
-    main()
+    run_pipeline()
