@@ -21,30 +21,30 @@ class ModelTrainer:
         """모든 모델 학습 및 평가"""
         print("--- 모델 학습 시작 ---")
         print(f"  사용할 모델: {list(self.models.keys())}")
-        
+
         if x_train.empty or len(y_train) == 0:
             print("  오류: 학습 데이터가 비어있습니다.")
             return self.results, self.prediction_results
-        
+
         num_unique_classes = len(np.unique(y_train))
         if num_unique_classes < 2:
             print(f"  경고: 클래스가 {num_unique_classes}개만 존재합니다.")
-        
+
         for model_name, model in self.models.items():
             print(f"\n  '{model_name}' 모델 처리 중...")
-            
+
             # 모델 학습
             success = self._train_model(model_name, model, x_train, y_train)
             if not success:
                 continue
-            
+
             # 모델 평가 (검증 데이터가 있는 경우)
             if x_val is not None and not x_val.empty and len(y_val) > 0:
                 self._evaluate_model(model_name, model, x_val, y_val)
             else:
                 print(f"    '{model_name}' 검증 데이터가 없어 평가를 건너뜁니다.")
                 self.results[model_name] = self._empty_result()
-        
+
         print("--- 모델 학습 완료 ---\n")
         return self.results, self.prediction_results
     

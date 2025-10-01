@@ -134,11 +134,11 @@ def run_pipeline():
             print("\n--- 4. Radiomics 전용 분석 ---")
             # DL embedding 없이 Radiomics만으로 분석
             radiomics_only_df = radiomics_df.drop(columns=['image_path'], errors='ignore')
-            
+
             if 'severity' in radiomics_only_df.columns:
                 print("\n--- Radiomics 전용 데이터셋 'severity' 분포 ---")
                 severity_counts = radiomics_only_df['severity'].value_counts(dropna=False)
-                
+
                 if mode == 'multi':
                     class_order = ['normal', 'nonsevere', 'severe']
                     ordered_counts = pd.Series({cls: severity_counts.get(cls, 0) for cls in class_order if cls in severity_counts.index})
@@ -147,7 +147,7 @@ def run_pipeline():
                     severity_distribution = severity_counts.sort_index()
                     print(severity_distribution)
                 print(f"총 데이터 케이스 수: {len(radiomics_only_df)}")
-            
+
             run_fold_analysis(radiomics_only_df, None, mode, output_dir)
         
         print(f"\n{mode} 모드 분석 과정 완료. 결과는 '{output_dir}' 폴더에 저장되었습니다.")
@@ -156,7 +156,7 @@ def run_pipeline():
         print(f"오류 발생: {e}")
         import traceback
         traceback.print_exc()
-    
+
     finally:
         close_logging()
         return logger

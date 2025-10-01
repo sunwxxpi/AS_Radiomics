@@ -2,6 +2,7 @@ import os
 import torch
 import torch.nn as nn
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import dl_cls_dataset
@@ -147,12 +148,48 @@ def generate_cam_for_samples(model, cam_data_list, class_names, cam_save_dir):
     print(f"--- CAM 생성 완료: {successful_count}/{len(cam_data_list)}개 성공 ---")
 
 
+def save_probabilities_csv(case_ids, labels, probs, class_names, config, fold_number):
+    """확률값을 CSV 파일로 저장 (앙상블용)
+
+    Args:
+        case_ids: 케이스 ID 리스트
+        labels: 실제 레이블 리스트
+        probs: 예측 확률 배열 (N x num_classes)
+        class_names: 클래스 이름 리스트
+        config: 설정 객체
+        fold_number: fold 번호
+    """
+    # probs 디렉토리 생성
+    probs_dir = os.path.join('./DL_Classification', 'results', config.writer_comment, 'probs')
+    os.makedirs(probs_dir, exist_ok=True)
+
+    # DataFrame 생성
+    data = {
+        'case_id': case_ids,
+        'true_label': labels,
+        'true_label_str': [class_names[label] for label in labels]
+    }
+
+    # 각 클래스별 확률 추가
+    for i, class_name in enumerate(class_names):
+        data[f'proba_{class_name}'] = probs[:, i]
+
+    df = pd.DataFrame(data)
+
+    # case_id 기준으로 정렬
+    df = df.sort_values(by='case_id').reset_index(drop=True)
+
+    output_path = os.path.join(probs_dir, f'fold_{fold_number}.csv')
+    df.to_csv(output_path, index=False)
+
+
 def run_inference(model, test_loader, device, fold_number, max_cam_samples=10):
     """모델 추론을 실행하고, 결과 및 CAM 생성용 데이터를 반환"""
     all_probs = []
     all_labels = []
+    all_case_ids = []
     cam_data_list = []
-    
+
     model.eval()
     try:
         with torch.no_grad():
@@ -163,10 +200,15 @@ def run_inference(model, test_loader, device, fold_number, max_cam_samples=10):
 
                 output = model(images=images)
                 probs = torch.softmax(output, dim=1)
-                
+
                 all_probs.append(probs.cpu().numpy())
                 all_labels.extend(labels.cpu().numpy())
-                
+
+                # case_id 수집 (파일명에서 _0000.nii.gz 제거)
+                for name in names:
+                    case_id = name.replace('_0000.nii.gz', '')
+                    all_case_ids.append(case_id)
+
                 # CAM 생성용 샘플 데이터 수집
                 if len(cam_data_list) < max_cam_samples:
                     for i in range(images.shape[0]):
@@ -180,7 +222,7 @@ def run_inference(model, test_loader, device, fold_number, max_cam_samples=10):
     finally:
         torch.cuda.empty_cache()
 
-    return all_labels, np.concatenate(all_probs, axis=0), cam_data_list
+    return all_labels, np.concatenate(all_probs, axis=0), all_case_ids, cam_data_list
 
 
 def main():
@@ -236,10 +278,10 @@ def main():
         model = model.to(device)
         
         # 1. 추론 실행 (결과 및 CAM 샘플 데이터 확보)
-        fold_labels, fold_probs, cam_samples = run_inference(
+        fold_labels, fold_probs, fold_case_ids, cam_samples = run_inference(
             model, test_loader, device, fold, max_cam_samples=20
         )
-        
+
         # 2. Confusion Matrix 생성 및 단일 Fold 평가
         if fold == 1:
             all_fold_labels = fold_labels
@@ -247,7 +289,11 @@ def main():
         evaluate_single_fold(fold_labels, fold_probs, class_names, config, fold)
         print(f"Fold {fold} Confusion Matrix 및 평가 완료.")
 
-        # 3. CAM 이미지 생성
+        # 3. 확률값 CSV 저장 (앙상블용)
+        save_probabilities_csv(fold_case_ids, fold_labels, fold_probs, class_names, config, fold)
+        print(f"Fold {fold} 확률값 저장 완료.")
+
+        # 4. CAM 이미지 생성
         if should_save_cam and cam_samples:
             cam_save_dir = os.path.join('./DL_Classification', 'results', config.writer_comment, 'cam_visualization', f'fold_{fold}')
             os.makedirs(cam_save_dir, exist_ok=True)
