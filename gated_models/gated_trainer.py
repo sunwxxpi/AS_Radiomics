@@ -22,6 +22,34 @@ def set_seed(seed=42):
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+    
+
+def calculate_class_weights(data_loader, num_classes):
+    """학습 데이터셋의 클래스별 분포를 기반으로 가중치를 자동 계산
+
+    Args:
+        data_loader (DataLoader): 학습 데이터 로더
+        num_classes (int): 클래스 개수
+
+    Returns:
+        torch.Tensor: 클래스별 가중치
+    """
+    class_counts = torch.zeros(num_classes)
+
+    # 전체 데이터에서 클래스별 개수 계산
+    for batch in data_loader:
+        labels = batch['label']
+        for label in labels:
+            class_counts[label] += 1
+
+    # 역가중치 계산 (전체 샘플 수 / (클래스 수 × 클래스별 샘플 수))
+    total_samples = class_counts.sum()
+    weights = total_samples / (num_classes * class_counts)
+
+    # 가중치가 inf가 되는 경우 방지
+    weights = torch.where(class_counts == 0, torch.tensor(1.0), weights)
+
+    return weights
 
 
 class GatedFusionDataset(Dataset):
@@ -162,8 +190,11 @@ class GatedFusionTrainer:
         Returns:
             dict: 학습 결과
         """
-        # Loss function
-        criterion = nn.CrossEntropyLoss()
+        # Loss function - 자동 가중치 계산
+        num_classes = self.model_config['num_classes']
+        weights = calculate_class_weights(train_loader, num_classes).to(self.device)
+        self.logger.info(f"Calculated weights for CrossEntropyLoss: {weights.cpu().numpy()}")
+        criterion = nn.CrossEntropyLoss(label_smoothing=0.1, weight=weights)
 
         # Optimizer
         optimizer = torch.optim.AdamW(
