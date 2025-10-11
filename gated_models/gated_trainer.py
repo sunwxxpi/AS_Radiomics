@@ -1,5 +1,6 @@
 import os
 import random
+import logging
 import numpy as np
 import torch
 import torch.nn as nn
@@ -7,8 +8,6 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import StratifiedKFold
 from tqdm import tqdm
-import logging
-
 from gated_models.gated_model import GatedFusionClassifier
 
 

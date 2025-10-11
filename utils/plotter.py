@@ -6,7 +6,7 @@ from sklearn.metrics import auc, roc_curve, precision_recall_curve
 
 class ResultPlotter:
     """결과 시각화를 담당하는 클래스"""
-    
+
     def __init__(self, output_dir, label_encoder):
         self.output_dir = output_dir
         self.label_encoder = label_encoder

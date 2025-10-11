@@ -34,7 +34,7 @@ class SoftVotingEnsemble:
 
         # LabelEncoder 초기화
         self.label_encoder = LabelEncoder()
-        self.label_encoder.fit(self.class_labels)
+        self.label_encoder.classes_ = np.array(self.class_labels)
 
     def load_dl_probs(self, dl_probs_path: str) -> pd.DataFrame:
         """딥러닝 모델의 확률값 로드
