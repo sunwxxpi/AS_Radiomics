@@ -86,7 +86,7 @@ def validate(config, model, val_loader, criterion):
 
     if config.num_classes > 2:
         # For multiclass, y_true should be in shape (n_samples,) and y_score in shape (n_samples, n_classes)
-        auc = roc_auc_score(y_true, y_score, multi_class='ovr')
+        auc = roc_auc_score(y_true, y_score, multi_class='ovr', average='macro')
     else:
         # For binary, y_true should be in shape (n_samples,) and y_score in shape (n_samples,)
         y_true = y_true.flatten()
