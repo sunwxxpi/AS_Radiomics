@@ -161,7 +161,14 @@ class GatedFusionTrainer:
         y = features_df['severity'].values
 
         # 레이블 인코딩
-        y_encoded = self.label_encoder.fit_transform(y)
+        desired_order = ['normal', 'nonsevere', 'severe']
+        unique_classes = np.unique(y)
+        classes_to_fit = [cls for cls in desired_order if cls in unique_classes]
+        remaining_classes = sorted([cls for cls in unique_classes if cls not in desired_order])
+        classes_to_fit.extend(remaining_classes)
+
+        self.label_encoder.classes_ = np.array(classes_to_fit, dtype=object)
+        y_encoded = self.label_encoder.transform(y)
         self.logger.info(f"클래스 매핑: {dict(zip(self.label_encoder.classes_, range(len(self.label_encoder.classes_))))}")
 
         # 정규화
