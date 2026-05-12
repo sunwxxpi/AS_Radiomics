@@ -7,6 +7,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, confusion_matrix, classification_report
 from tqdm import tqdm
 from gated_models.gated_model import GatedFusionClassifier
 
@@ -315,12 +316,12 @@ class GatedFusionTrainer:
         return val_loss, val_acc
 
     def train_with_cv(self, features_df, n_folds=5, external_fold_idx=None):
-        """K-fold 교차검증 학습
+        """K-fold 교차검증 학습 (DL Classification과 동일한 split 방식)
 
         Args:
             features_df (pd.DataFrame): Radiomics + DL features
-            n_folds (int): Fold 개수 (1이면 단순 train/val split)
-            external_fold_idx (int): 외부에서 전달된 fold 번호 (n_folds=1일 때 사용)
+            n_folds (int): Fold 개수 (기본값: 5)
+            external_fold_idx (int): 특정 fold만 학습 (1~5), None이면 전체 fold 학습
 
         Returns:
             list: Fold별 결과
@@ -334,29 +335,24 @@ class GatedFusionTrainer:
 
         fold_results = []
 
-        # n_folds=1인 경우 단순 train/val split
-        if n_folds == 1:
-            from sklearn.model_selection import train_test_split
+        # DL Classification과 동일한 StratifiedKFold 사용
+        skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
+        splits = list(skf.split(X_radiomics, y))
 
-            train_idx, val_idx = train_test_split(
-                np.arange(len(y)),
-                test_size=0.2,
-                stratify=y,
-                random_state=self.random_seed
-            )
-            splits = [(train_idx, val_idx)]
+        # external_fold_idx가 지정된 경우 해당 fold만 학습
+        if external_fold_idx is not None:
+            if external_fold_idx < 1 or external_fold_idx > n_folds:
+                raise ValueError(f"external_fold_idx는 1~{n_folds} 사이여야 합니다.")
+
+            # 해당 fold만 선택 (fold_idx는 1부터 시작)
+            selected_split = [(external_fold_idx, splits[external_fold_idx - 1])]
         else:
-            # K-fold split
-            skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=self.random_seed)
-            splits = list(skf.split(X_radiomics, y))
+            # 전체 fold 학습
+            selected_split = [(i + 1, split) for i, split in enumerate(splits)]
 
-        for fold_idx, (train_idx, val_idx) in enumerate(splits, 1):
-            # external_fold_idx가 주어진 경우 (n_folds=1), 해당 번호 사용
-            if external_fold_idx is not None and n_folds == 1:
-                fold_idx = external_fold_idx
-
+        for fold_idx, (train_idx, val_idx) in selected_split:
             # 각 fold 시작 시 seed 재설정 (완전한 재현성)
-            set_seed(self.random_seed + fold_idx)
+            set_seed(42)
             self.logger.info(f"\n{'='*50}")
             self.logger.info(f"Fold {fold_idx}/{n_folds if n_folds > 1 else 'Single'} 학습 시작")
             self.logger.info(f"{'='*50}")
@@ -385,6 +381,11 @@ class GatedFusionTrainer:
                 num_workers=4,
                 drop_last=False  # Validation은 모든 샘플 사용
             )
+
+            # model_config 업데이트 (자동 설정)
+            self.model_config['radiomics_dim'] = data['radiomics_dim']
+            self.model_config['dl_dim'] = data['dl_dim']
+            self.model_config['num_classes'] = data['num_classes']
 
             # Create model
             model = GatedFusionClassifier(
@@ -415,3 +416,126 @@ class GatedFusionTrainer:
         self.logger.info(f"Average Val Acc: {avg_val_acc:.2f}%")
 
         return fold_results
+
+    def evaluate_final_performance(self, val_loader, model_path, fold_idx):
+        """학습 완료 후 최종 성능 평가
+
+        Args:
+            val_loader (DataLoader): Validation 데이터 로더
+            model_path (str): 저장된 best model 경로
+            fold_idx (int): Fold 번호
+
+        Returns:
+            dict: 평가 결과
+        """
+        self.logger.info(f"\n{'='*50}")
+        self.logger.info(f"Fold {fold_idx} 최종 성능 평가 시작")
+        self.logger.info(f"{'='*50}")
+
+        # Best model 로드
+        if not os.path.exists(model_path):
+            self.logger.error(f"모델 파일을 찾을 수 없습니다: {model_path}")
+            return None
+
+        checkpoint = torch.load(model_path, map_location=self.device)
+
+        # 모델 생성
+        radiomics_dim = self.model_config['radiomics_dim']
+        dl_dim = self.model_config['dl_dim']
+        num_classes = self.model_config['num_classes']
+
+        model = GatedFusionClassifier(
+            radiomics_dim=radiomics_dim,
+            dl_dim=dl_dim,
+            num_classes=num_classes,
+            fusion_dim=self.model_config.get('fusion_dim'),
+            hidden_dims=self.model_config.get('hidden_dims', [256, 128]),
+            dropout=0.0  # Evaluation에서는 dropout 비활성화
+        )
+
+        model.load_state_dict(checkpoint['model_state_dict'])
+        model = model.to(self.device)
+        model.eval()
+
+        self.logger.info(f"Best model 로드 완료 (Epoch {checkpoint['epoch']})")
+
+        # Validation set에 대한 예측
+        all_preds = []
+        all_labels = []
+        all_probs = []
+
+        with torch.no_grad():
+            for batch in tqdm(val_loader, desc=f"Fold {fold_idx} Evaluation"):
+                radiomics = batch['radiomics'].to(self.device)
+                dl = batch['dl'].to(self.device)
+                labels = batch['label'].to(self.device)
+
+                outputs = model(radiomics, dl)
+                probs = torch.softmax(outputs, dim=1)
+                _, predicted = outputs.max(1)
+
+                all_preds.extend(predicted.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
+                all_probs.extend(probs.cpu().numpy())
+
+        all_preds = np.array(all_preds)
+        all_labels = np.array(all_labels)
+        all_probs = np.array(all_probs)
+
+        # 성능 지표 계산
+        accuracy = accuracy_score(all_labels, all_preds)
+
+        # Multi-class: macro average
+        f1_macro = f1_score(all_labels, all_preds, average='macro', zero_division=0)
+        precision_macro = precision_score(all_labels, all_preds, average='macro', zero_division=0)
+        recall_macro = recall_score(all_labels, all_preds, average='macro', zero_division=0)
+
+        # Per-class metrics
+        f1_per_class = f1_score(all_labels, all_preds, average=None, zero_division=0)
+        precision_per_class = precision_score(all_labels, all_preds, average=None, zero_division=0)
+        recall_per_class = recall_score(all_labels, all_preds, average=None, zero_division=0)
+
+        # Confusion Matrix
+        cm = confusion_matrix(all_labels, all_preds)
+
+        # 결과 로깅
+        self.logger.info(f"\n=== Fold {fold_idx} 최종 성능 ===")
+        self.logger.info(f"Accuracy: {accuracy:.4f}")
+        self.logger.info(f"F1-Score (macro): {f1_macro:.4f}")
+        self.logger.info(f"Precision (macro): {precision_macro:.4f}")
+        self.logger.info(f"Recall (macro): {recall_macro:.4f}")
+
+        self.logger.info(f"\n=== Per-Class Metrics ===")
+        for i, class_name in enumerate(self.label_encoder.classes_):
+            self.logger.info(f"{class_name}:")
+            self.logger.info(f"  F1: {f1_per_class[i]:.4f}, Precision: {precision_per_class[i]:.4f}, Recall: {recall_per_class[i]:.4f}")
+
+        self.logger.info(f"\n=== Confusion Matrix ===")
+        self.logger.info(f"\n{cm}")
+
+        # Classification Report
+        self.logger.info(f"\n=== Classification Report ===")
+        report = classification_report(all_labels, all_preds, target_names=self.label_encoder.classes_, zero_division=0)
+        self.logger.info(f"\n{report}")
+
+        # 결과 딕셔너리
+        results = {
+            'fold': fold_idx,
+            'accuracy': accuracy,
+            'f1_macro': f1_macro,
+            'precision_macro': precision_macro,
+            'recall_macro': recall_macro,
+            'confusion_matrix': cm,
+            'predictions': all_preds,
+            'labels': all_labels,
+            'probabilities': all_probs,
+            'class_names': self.label_encoder.classes_
+        }
+
+        # Per-class metrics 추가
+        for i, class_name in enumerate(self.label_encoder.classes_):
+            results[f'f1_{class_name}'] = f1_per_class[i]
+            results[f'precision_{class_name}'] = precision_per_class[i]
+            results[f'recall_{class_name}'] = recall_per_class[i]
+
+        return results
