@@ -274,9 +274,10 @@ class SoftVotingEnsemble:
         # 기본 메트릭
         accuracy = accuracy_score(y_true, y_pred)
 
-        # F1-Score 계산 (trainer.py와 동일한 방식)
+        # F1-Score 계산. y_true/y_pred 가 문자열 라벨이므로 binary 는 pos_label 을 명시해야 한다
+        # (미지정 시 sklearn 기본 pos_label=1 이 문자열 라벨에 없어 ValueError). 양성=severe (메트릭 규약).
         if len(self.class_labels) <= 2:  # Binary classification
-            f1 = f1_score(y_true, y_pred, average='binary', zero_division=0)
+            f1 = f1_score(y_true, y_pred, average='binary', pos_label='severe', zero_division=0)
         else:  # Multi-class classification
             f1 = f1_score(y_true, y_pred, average='macro', zero_division=0)
 
