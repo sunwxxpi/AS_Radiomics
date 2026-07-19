@@ -4,8 +4,9 @@ import torch
 from monai.transforms import Compose, Resize
 
 sys.path.append('/home/psw/AS_Radiomics')
+from config import Config
 from DL_Classification.dl_cls_model import CustomModel, nnUNetClassificationModel
-from DL_Classification.dl_cls_dataset import CTNormalization, load_nifti_image
+from DL_Classification.dl_cls_dataset import CTNormalization, load_nifti_image, load_intensity_properties_from_plans
 
 
 class DLEmbeddingExtractor:
@@ -20,13 +21,19 @@ class DLEmbeddingExtractor:
         self.full_model = None
         self.embedding_dim = None
         
-        # CT 정규화 설정
-        self.ct_normalization = CTNormalization(
-            mean_intensity=363.5522766113281,
-            std_intensity=249.69992065429688,
-            lower_bound=130.0,
-            upper_bound=1298.0
-        )
+        # CT 정규화 설정: 인코더 학습/평가(get_as_dataset)와 동일하게 plans_file_norm 에서 로드해야
+        # frozen 인코더가 학습 때와 같은 정규화 입력을 받는다. plans 미지정 시에만 동일 fallback 사용.
+        plans_file_norm = Config.DL_NNUNET_CONFIG.get('plans_file_norm') if Config.DL_NNUNET_CONFIG else None
+        if plans_file_norm:
+            intensity_props = load_intensity_properties_from_plans(plans_file_norm)
+        else:
+            intensity_props = {
+                'mean_intensity': 363.5522766113281,
+                'std_intensity': 249.69992065429688,
+                'lower_bound': 130.0,
+                'upper_bound': 1298.0
+            }
+        self.ct_normalization = CTNormalization(**intensity_props)
         
         # 전처리 파이프라인 설정
         self.transform = Compose([
