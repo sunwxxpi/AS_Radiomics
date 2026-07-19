@@ -75,6 +75,14 @@ def run_pipeline():
                     print("  모든 DL 모델이 없으므로 DL embedding 없이 계속 진행합니다.")
                     Config.ENABLE_DL_EMBEDDING = False
                     dl_model_paths = {}
+                    # DL 의존 경로도 함께 끈다. Gated Fusion 은 run_fold_analysis 에서
+                    # ENABLE_DL_EMBEDDING 이 아닌 USE_GATED_FUSION 만 보고 분기하므로, 켜둔 채로 두면
+                    # DL embedding 없는 Radiomics 전용 특징이 Gated Fusion 으로 흘러가 시작 검증이
+                    # 막던 금지 상태를 재생성한다.
+                    if Config.USE_GATED_FUSION or Config.USE_ENSEMBLE:
+                        print("  Gated Fusion / Ensemble 도 비활성화하고 Radiomics 전용으로 진행합니다.")
+                        Config.USE_GATED_FUSION = False
+                        Config.USE_ENSEMBLE = False
         else:
             print("  DL Embedding 비활성화")
             
