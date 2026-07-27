@@ -89,17 +89,17 @@ MLP Classifier (분류 헤드):
 **파라미터 수**:
 ```
 GatedFusionLayer:
-  - Transform: 427 × 427 + 427 = 182,706
-  - Gate: 427 × 427 + 427 = 182,706
-  - 소계: 365,412
+  - Transform: 427 × 427 + 427 = 182,756
+  - Gate: 427 × 427 + 427 = 182,756
+  - 소계: 365,512
 
 MLP Classifier:
-  - Layer 1: 427 × 256 + 256 = 109,568
-  - Layer 2: 256 × 128 + 128 = 32,896
-  - Layer 3: 128 × 3 + 3 = 387
-  - 소계: 142,851
+  - Layer 1: Linear 427 × 256 + 256 = 109,568 / BatchNorm1d(256) = 512
+  - Layer 2: Linear 256 × 128 + 128 = 32,896 / BatchNorm1d(128) = 256
+  - Layer 3: Linear 128 × 3 + 3 = 387
+  - 소계: 143,619
 
-전체: 508,263 파라미터
+전체: 509,131 파라미터
 ```
 
 ---
@@ -121,15 +121,15 @@ Radiomics [107] ─┐
 DL Embed [320] ──┘                  (학습된)              ↓
                                                    LASSO Selection
                                                           ↓
-                                                   Selected [~19]
+                                                  Selected [22~61]
                                                           ↓
-                                        ML Classifiers (LR, SVM, RF, GB, KNN, NB)
+                                        ML Classifiers (기본 LR, SVM, RF)
 ```
 
 **차원 변화**:
 - 입력: Radiomics (107) + DL (320) = **427**
 - Gated Fusion 출력: **427** (fusion_dim=None 기본값)
-- LASSO 선택 후: **약 19** (데이터에 따라 변동)
+- LASSO 선택 후: **22~61** (기존 실행 산출물 실측값, 데이터·fold 에 따라 변동)
 - 최종 분류: **3** (multi) 또는 **2** (binary)
 
 ## 파일 구조
@@ -164,9 +164,9 @@ python main.py
 
 이 스크립트는 다음을 자동으로 수행합니다:
 1. Radiomics + DL features 추출
-2. Fold별 Gated Fusion 모델 학습 (`--use_gated_fusion` 사용 시)
+2. Fold별 Gated Fusion 모델 학습 (`USE_GATED_FUSION = True` 인 경우)
 3. Fused features 추출
-4. 전통적 ML 분류기 (LR, SVM, RF, GB, KNN, NB) 학습 및 평가
+4. 전통적 ML 분류기 학습 및 평가 (기본 LR, SVM, RF; GB/KNN/NB 는 CLASSIFICATION_MODELS 에 추가해야 실행)
 5. LASSO 특징 선택 결과 저장
 
 ### 2. 개별 모듈 사용
@@ -219,11 +219,12 @@ trainer = GatedFusionTrainer(
     random_seed=42
 )
 
-# 단일 fold 학습 (n_folds=1, 내부적으로 train/val split)
+# 단일 fold만 학습 (전체 5-fold 중 하나 선택)
+# n_folds 는 5 이상이어야 한다. StratifiedKFold(n_splits=1) 은 sklearn 에서 ValueError.
 fold_results = trainer.train_with_cv(
     features_df,
-    n_folds=1,
-    external_fold_idx=1  # fold 번호 지정
+    n_folds=5,
+    external_fold_idx=1  # 학습할 fold 번호 (1~5)
 )
 
 # 또는 K-fold 교차검증 학습
@@ -287,7 +288,7 @@ FEATURE_SELECTION_METHOD = 'lasso'  # LASSO 특징 선택 사용
 
 2. **Stage 2: 전통적 ML 분류기 학습**
    - 학습된 Gated Fusion으로 fused features 추출 (427개)
-   - LASSO로 특징 선택 수행 (427개 → 약 19개)
+   - LASSO로 특징 선택 수행 (427개 → 22~61개, 기존 실행 산출물 실측값)
    - LR, SVM, RF 등 전통적 분류기 학습 및 비교
    - ML 분류기 결과를 model_validation_summary.csv에 병합
    - 최종 결과: MLP, LR, RF, SVM 순서로 정렬
@@ -303,16 +304,16 @@ FEATURE_SELECTION_METHOD = 'lasso'  # LASSO 특징 선택 사용
 - **Label Smoothing**: 0.1 (과적합 방지)
 - **Regularization**: Dropout (0.3), Weight Decay (1e-2)
 - **Early Stopping**: Validation loss 기준 (patience=50)
-- **재현성**: 모든 random seed 고정 (random_seed=42)
+- **재현성**: 모든 random seed 고정 (`set_seed()`)
 
 ### 재현성 보장
 
 모든 fold에서 완전히 동일한 결과를 보장하기 위해:
-- Python random, NumPy, PyTorch random seed 고정 (seed=42)
+- Python random, NumPy, PyTorch random seed 고정 (`GatedFusionTrainer` 초기화 시 `random_seed`, 기본값 42 / `main.py` 경유 시 `gated_pipeline.py` 가 50 전달)
 - CUDA deterministic mode 활성화
 - cuDNN benchmark mode 비활성화
-- 각 fold 시작 시 seed 재설정 (완전한 재현성)
-- StratifiedKFold 사용 (DL Classification과 동일한 분할 방식)
+- 각 fold 시작 시 seed=42 로 재설정 (완전한 재현성)
+- StratifiedKFold(shuffle=True, random_state=42) 사용 (DL Classification과 동일한 분할 방식)
 
 ### 레이블 인코딩
 
@@ -332,6 +333,7 @@ radiomics_analysis_results/
     └── lasso/
         └── multi/
             └── dlnnunet_32_384_320_gated_YYYYMMDD_HHMMSS/
+                ├── log.txt                                # 파이프라인 stdout 로그 (최상위에만 생성)
                 ├── fold_1/
                 │   ├── fold_1_best_model.pth              # 학습된 Gated Fusion 모델
                 │   ├── gated_training.log                 # 학습 로그
@@ -339,7 +341,11 @@ radiomics_analysis_results/
                 │   ├── gated_fused_features_train.csv     # 학습용 fused features
                 │   ├── gated_fused_features_test.csv      # 테스트용 fused features
                 │   ├── lasso_feature_analysis.csv         # LASSO 특징 분석 결과
-                │   ├── confusion_matrix_*.png             # Confusion matrix
+                │   ├── gated_fusion_predictions_fold_1.csv    # MLP 예측 결과 (확률 포함)
+                │   ├── MLP_confusion_matrix.png           # MLP Confusion matrix
+                │   ├── {LR,SVM,RF}_confusion_matrix.png   # ML 분류기 Confusion matrix
+                │   ├── {LR,SVM,RF}_multiclass_ROC_curve.png   # multi 모드 ROC (binary 모드는 {model}_ROC_curve.png)
+                │   ├── {LR,SVM,RF}_multiclass_PR_curve.png    # multi 모드 PR (binary 모드는 {model}_PR_curve.png)
                 │   ├── test_cases_prediction_results.csv  # 예측 결과
                 │   └── model_validation_summary.csv       # 성능 요약
                 ├── fold_2/
@@ -357,8 +363,8 @@ radiomics_analysis_results/
 1. **fold_{N}_best_model.pth**: 학습된 Gated Fusion 모델 체크포인트
 2. **gated_training.log**: 학습 과정 상세 로그
 3. **model_validation_summary.csv**: MLP 및 ML 분류기 성능 요약 (병합)
-   - MLP: Gated Fusion + Classifier (Test Set 평가)
-   - LR, RF, SVM: 전통적 ML 분류기 (Validation Set 평가)
+   - MLP: Gated Fusion + Classifier (imagesVal 평가)
+   - LR, RF, SVM: fused features 로 학습한 전통적 ML 분류기 (`DATA_SPLIT_MODE='fix'` 기준 MLP 와 동일한 imagesVal 평가)
 4. **MLP_confusion_matrix.png**: MLP 모델의 Confusion Matrix 이미지
 5. **gated_fusion_predictions_fold_{N}.csv**: MLP 예측 결과 (확률 포함)
 6. **lasso_feature_analysis.csv**: LASSO 특징 선택 결과
@@ -401,12 +407,12 @@ radiomics_analysis_results/
 ```bash
 # 프로젝트 루트에서 실행
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-python main_gated.py
+python main.py
 ```
 
 ### CUDA Out of Memory
 
-`train_config`에서 배치 크기 감소:
+`gated_models/gated_pipeline.py` 안에 하드코딩된 `train_config`에서 배치 크기 감소:
 
 ```python
 train_config = {
@@ -424,9 +430,13 @@ train_config = {
 `config.py`에서 DL 모델 경로 확인:
 
 ```python
-# DL 모델이 학습되어 있는지 확인
-DL_MODEL_PATH = f'./DL_Classification/weights/{DL_COMMENT_WRITER}/{FOLD}/best_model.pth'
+# config.py의 get_dl_model_paths()가 {fold: 경로} 딕셔너리를 반환한다.
+# 포맷: ./DL_Classification/weights/{DL_COMMENT_WRITER}/{fold}/best_model.pth
+Config.get_dl_model_paths()
 ```
+
+- **일부 fold** 가중치만 없으면: 경고만 출력하고 해당 fold 의 DL embedding 추출기를 만들지 않는다.
+- **모든 fold** 가중치가 없으면: `main.py` 가 `ENABLE_DL_EMBEDDING` 과 함께 `USE_GATED_FUSION` / `USE_ENSEMBLE` 도 False 로 되돌리고 Radiomics 전용으로 진행한다. 이 경우 결과 디렉토리 이름에는 `_gated` 가 남아 있어도 Gated Fusion 산출물(`fold_N_best_model.pth` 등)은 생성되지 않는다.
 
 ### Fold 번호 불일치
 
@@ -445,7 +455,7 @@ DL_MODEL_PATH = f'./DL_Classification/weights/{DL_COMMENT_WRITER}/{FOLD}/best_mo
 
 **Binary 분류** (2-class):
 - AUC, AP: 양성 클래스(severe) 기준 계산
-- F1-Score: Binary 방식
+- F1-Score: LR/SVM/RF 는 Binary 방식(양성=severe), MLP 은 `gated_trainer.py` 의 `evaluate_final_performance` 가 항상 Macro 로 계산
 
 ## 통합된 파이프라인
 
@@ -455,6 +465,8 @@ DL_MODEL_PATH = f'./DL_Classification/weights/{DL_COMMENT_WRITER}/{FOLD}/best_mo
 - **Gated Fusion 방식**: `config.py`에서 `USE_GATED_FUSION = True`
 
 두 방식 모두 동일한 코드베이스를 사용하며, `config.py`의 설정만 변경하면 됩니다.
+
+`USE_GATED_FUSION = True` 이면 `main.py:run_fold_analysis` 가 Gated Fusion 분석을 호출한 뒤 곧바로 반환하므로, `USE_ENSEMBLE = True` 를 함께 켜도 Soft Voting Ensemble 은 실행되지 않습니다.
 
 ## 참고 자료
 
