@@ -43,6 +43,13 @@ class Config:
         'plans_file_norm': './DL_Classification/nnUNet/AVC_nnUNetResEncUNetLPlans.json'
     }
     
+    # Radiomics 추출 설정
+    # PyRadiomics 의 resampledPixelSpacing 은 [x, y, z] 순서 (nnUNet plans 의 [z, y, x] 와 반대).
+    # in-plane 값은 이 코호트의 segmentation 에 쓴 nnU-Net planner 가 결정한 spacing 이고,
+    # z 는 전 증례 3.0 mm 로 동일해 보간 오차만 늘리므로 원본을 유지한다.
+    RESAMPLED_SPACING = [0.3828125, 0.3828125, 3.0]   # None 이면 리샘플링 미적용
+    RESAMPLE_INTERPOLATOR = 'sitkLinear'              # 석회화 경계에서 B-spline 은 overshoot 을 만든다
+
     # Dilation 설정
     ENABLE_DILATION = False   # Dilation 사용 여부
     DILATION_ITERATIONS = 1   # Dilation 반복 횟수
@@ -252,6 +259,10 @@ class Config:
             print(f"랜덤 시드: {cls.DATA_SPLIT_RANDOM_STATE}")
         print(f"특징 선택 방법: {cls.FEATURE_SELECTION_METHOD}")
         print(f"분류 모델: {cls.CLASSIFICATION_MODELS}")
+        if cls.RESAMPLED_SPACING is None:
+            print("Radiomics 리샘플링: 미적용 (원본 spacing)")
+        else:
+            print(f"Radiomics 리샘플링: {cls.RESAMPLED_SPACING} mm [x, y, z], interpolator={cls.RESAMPLE_INTERPOLATOR}")
         print(f"Dilation 사용: {cls.ENABLE_DILATION}")
         if cls.ENABLE_DILATION:
             print(f"Dilation 반복 횟수: {cls.DILATION_ITERATIONS}")

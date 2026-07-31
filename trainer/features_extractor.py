@@ -16,9 +16,12 @@ class RadiomicsExtractor:
     """
     
     def __init__(self, geometry_tolerance=1e-5, enable_dl_embedding=False, dl_model_paths=None, dl_model_type='custom', dl_nnunet_config=None,
-                 enable_dilation=False, dilation_iterations=1):
+                 resampled_spacing=None, resample_interpolator='sitkLinear', enable_dilation=False, dilation_iterations=1):
         self.extractor = featureextractor.RadiomicsFeatureExtractor()
         self.extractor.settings['geometryTolerance'] = geometry_tolerance
+        # resampled_spacing 은 [x, y, z] mm. None 이면 PyRadiomics 가 리샘플링 단계를 건너뛴다.
+        self.extractor.settings['resampledPixelSpacing'] = resampled_spacing
+        self.extractor.settings['interpolator'] = resample_interpolator
         self.enable_dl_embedding = enable_dl_embedding
         self.dl_extractors = {}  # fold별 DL embedding 추출기 저장소
         self.enable_dilation = enable_dilation

@@ -98,6 +98,8 @@ def run_pipeline():
             dl_model_paths=dl_model_paths,
             dl_model_type=Config.DL_MODEL_TYPE if Config.ENABLE_DL_EMBEDDING else 'custom',
             dl_nnunet_config=Config.DL_NNUNET_CONFIG if Config.ENABLE_DL_EMBEDDING and Config.DL_MODEL_TYPE == 'nnunet' else None,
+            resampled_spacing=Config.RESAMPLED_SPACING,
+            resample_interpolator=Config.RESAMPLE_INTERPOLATOR,
             enable_dilation=Config.ENABLE_DILATION,
             dilation_iterations=Config.DILATION_ITERATIONS
         )

@@ -124,6 +124,7 @@ AS_Radiomics/
 ### 1. Radiomics 특징 추출
 
 - PyRadiomics를 사용하여 handcrafted 특징 추출
+- 추출 전 `[0.3828125, 0.3828125, 3.0] mm` 로 리샘플링 (`Config.RESAMPLED_SPACING`, `None` 이면 원본 spacing)
 - imagesTr과 imagesVal 디렉토리에서 독립적으로 추출 후 병합
 - Dilation 옵션 지원
 
@@ -352,11 +353,3 @@ USE_ENSEMBLE = True  # 또는 USE_GATED_FUSION = True
 - 코딩 에이전트용 규약: [CLAUDE.md](CLAUDE.md)
 - Gated Fusion 상세: [gated_models/README.md](gated_models/README.md)
 - DL Classification: `DL_Classification/` 디렉토리
-
-## 라이선스
-
-이 프로젝트는 연구 목적으로만 사용됩니다.
-
-## 문의
-
-프로젝트 관련 문의사항은 이슈를 통해 남겨주세요.
