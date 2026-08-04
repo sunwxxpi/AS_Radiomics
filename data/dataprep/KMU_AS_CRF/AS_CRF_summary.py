@@ -1,7 +1,7 @@
 import pandas as pd
 
 # CSV 파일 읽기 (파일 경로 및 인코딩 옵션을 파일에 맞게 수정)
-df = pd.read_csv('AS_CRF.csv')
+df = pd.read_csv('/home/psw/AS_Radiomics/data/AS_CRF.csv')
 
 # 필요한 날짜 컬럼들을 datetime 형식으로 변환 (오류 발생 시 결측치로 처리)
 date_cols = ['Cardiac CT검사일자', 'Chest CT검사일자'] + [f'Chest PA date_{i}' for i in range(1, 7)]

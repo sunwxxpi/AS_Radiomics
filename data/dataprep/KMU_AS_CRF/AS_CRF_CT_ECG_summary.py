@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 # CSV 파일 읽기
-df = pd.read_csv('/home/psw/AS_Radiomics/data/dataprep/KMU_AS_CRF/AS_CRF.csv')
+df = pd.read_csv('/home/psw/AS_Radiomics/data/AS_CRF.csv')
 
 # 날짜 컬럼을 datetime 형식으로 변환
 date_cols = ['Cardiac CT검사일자', 'Chest CT검사일자', 'Echocardiography_date']

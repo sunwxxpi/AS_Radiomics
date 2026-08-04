@@ -83,10 +83,13 @@ DATA_SPLIT_RANDOM_STATE = 42   # random 모드에서만 사용
 AS_Radiomics/
 ├── config.py                          # 전역 설정 관리
 ├── main.py                            # 메인 파이프라인
-├── data/                              # 데이터 로딩 및 전처리
+├── data/                              # 데이터 로딩·전처리 + 데이터셋 실체
 │   ├── loader.py
 │   ├── preprocessor.py
-│   └── AS_CRF.csv                     # 환자 레이블 파일
+│   ├── AS_CRF.csv                     # 환자 레이블 파일
+│   ├── dataprep/                      # 데이터셋 구축 스크립트 (1회성, 파이프라인에서 호출 안 함)
+│   ├── datasets/                      # Dataset00* 영상·마스크 (git 제외)
+│   └── datasets_raw/                  # 원본 DICOM (git 제외)
 ├── trainer/                           # 특징 추출 및 모델 학습
 │   ├── features_extractor.py
 │   ├── dl_embedding_extractor.py
