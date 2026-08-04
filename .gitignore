@@ -9,6 +9,9 @@ CLAUDE.md
 
 radiomics_analysis_results/
 
+data/datasets/
+data/datasets_raw/
+
 *.xlsx
 *.csv
 *.pth

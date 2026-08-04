@@ -5,7 +5,7 @@ class Config:
     """프로젝트 설정을 관리하는 클래스"""
     
     # 경로 설정
-    BASE_DIR = '/home/psw/AVS-Diagnosis/Dataset003_total'
+    BASE_DIR = './data/datasets/Dataset003_total'
     LABEL_FILE = './data/AS_CRF.csv'
     BASE_OUTPUT_DIR = './radiomics_analysis_results'
     
