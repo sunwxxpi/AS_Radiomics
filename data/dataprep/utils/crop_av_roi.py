@@ -227,7 +227,7 @@ def process_0002_series(series_dir, output_base_dir, failed_cases):
     print(f"발견된 .nii.gz 파일 수: 시리즈({len(series_nii_files)}) + results({len(results_nii_files)}) = {len(all_nii_files)}")
     
     # 출력 디렉토리 생성
-    relative_path = os.path.relpath(series_dir, "KMU/cardiac CT")
+    relative_path = os.path.relpath(series_dir, "/home/psw/AS_Radiomics/data/datasets_raw/KMU/cardiac CT")
     output_dir = os.path.join(output_base_dir, relative_path)
     os.makedirs(output_dir, exist_ok=True)
     
@@ -305,8 +305,8 @@ def main():
     메인 실행 함수
     """
     # 설정
-    BASE_CARDIAC_CT_DIR = "KMU/cardiac CT"
-    OUTPUT_BASE_DIR = "KMU/cardiac CT_av_roi_cropped"
+    BASE_CARDIAC_CT_DIR = "/home/psw/AS_Radiomics/data/datasets_raw/KMU/cardiac CT"
+    OUTPUT_BASE_DIR = "/home/psw/AS_Radiomics/data/datasets_raw/KMU/cardiac CT_av_roi_cropped"
     
     print(f"기본 디렉토리: {BASE_CARDIAC_CT_DIR}")
     print(f"출력 디렉토리: {OUTPUT_BASE_DIR}")

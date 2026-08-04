@@ -281,12 +281,12 @@ def crop_avc_images(image_dir, pred_dir, output_dir, crop_size=(160, 160, 32)):
 def main():
     parser = argparse.ArgumentParser(description='AVC prediction 기반 CT 이미지 cropping')
     parser.add_argument('--image_dir', type=str, 
-                       default='./Dataset001_KMU_Cardiac_AVC_TOTAL/imagesVal')
+                       default='/home/psw/AS_Radiomics/data/datasets/Dataset001_KMU_Cardiac_AVC_TOTAL/imagesVal')
     parser.add_argument('--pred_dir', type=str,
-                       default='./Dataset001_KMU_Cardiac_AVC_TOTAL/predVal')
+                       default='/home/psw/AS_Radiomics/data/datasets/Dataset001_KMU_Cardiac_AVC_TOTAL/predVal')
     parser.add_argument('--output_dir', type=str,
-                       default='./Dataset001_KMU_Cardiac_AVC_TOTAL_CROPPED_120_120_24')
-    parser.add_argument('--crop_size', nargs=3, type=int, default=[120, 120, 24])
+                       default='/home/psw/AS_Radiomics/data/datasets/Dataset001_KMU_Cardiac_AVC_TOTAL_CROPPED')
+    parser.add_argument('--crop_size', nargs=3, type=int, default=[160, 160, 32])
     
     args = parser.parse_args()
     

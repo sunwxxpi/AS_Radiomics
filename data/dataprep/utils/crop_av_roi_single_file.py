@@ -78,7 +78,7 @@ def extract_minimal_bounding_box(original_img_path, annotation_img_path, output_
     return cropped_data, cropped_img, ((min_x, max_x), (min_y, max_y), (min_z, max_z))
 
 if __name__ == "__main__":
-    orig_path = "./KUDH0004.nii.gz"
-    annot_path = "./KUDH0004_000.nii.gz"
+    orig_path = "/home/psw/AS_Radiomics/data/datasets_raw/KMU/cardiac CT/cardiac_ct_1차/Small FoV/KUDH0004/0002/KUDH0004.nii.gz"
+    annot_path = "/home/psw/AS_Radiomics/data/datasets_raw/KMU/cardiac CT/cardiac_ct_1차/Small FoV/KUDH0004/0002/results/KUDH0004_000.nii.gz"
     
     extract_minimal_bounding_box(orig_path, annot_path)

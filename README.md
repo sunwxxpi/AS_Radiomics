@@ -147,7 +147,7 @@ AS_Radiomics/
   1. Stage 1: Gated Fusion Layer + MLP Classifier 학습 → imagesVal(test set)로 MLP 최종 성능 평가
   2. Stage 2: Fused features 추출 → 전통적 ML 분류기 학습
      (`fusion_dim` 미지정 시 radiomics + DL 차원 합. nnUNet 기본 설정에서는 107 + 320 = 427)
-- Gated Fusion 이 켜져 있으면 Ensemble 은 실행되지 않는다 (`main.py:208-210` 에서 조기 반환)
+- Gated Fusion 이 켜져 있으면 Ensemble 은 실행되지 않는다 (`main.py:210-212` 에서 조기 반환)
 
 ### 4. 특징 선택
 
@@ -352,7 +352,7 @@ USE_ENSEMBLE = True  # 또는 USE_GATED_FUSION = True
   - 실행 시나리오·트러블슈팅: [docs/WORKFLOWS.md](docs/WORKFLOWS.md)
   - `Config` 전수 레퍼런스: [docs/CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md)
   - 결과 디렉토리/CSV 사양: [docs/RESULTS_LAYOUT.md](docs/RESULTS_LAYOUT.md)
-  - 실험 설계 검토 노트 (제안 단계, 코드 미반영): [docs/notes/](docs/notes/)
+  - 실험 설계 검토 노트 (항목별 진행 상태는 각 문서의 `[완료]` 표시 참조): [docs/notes/](docs/notes/)
 - 코딩 에이전트용 규약: [CLAUDE.md](CLAUDE.md)
 - Gated Fusion 상세: [gated_models/README.md](gated_models/README.md)
 - DL Classification: `DL_Classification/` 디렉토리

@@ -299,12 +299,12 @@ def main():
     DATASET_CONFIGS = {
         'total': {
             'source_dir': '/home/psw/AS_Radiomics/data/datasets/Dataset001_KMU_Cardiac_AVC_TOTAL',
-            'output_dir': './Dataset003_total',
+            'output_dir': '/home/psw/AS_Radiomics/data/datasets/Dataset003_total',
             'dataset_name': 'Dataset003_total'
         },
         'total_cropped': {
             'source_dir': '/home/psw/AS_Radiomics/data/datasets/Dataset001_KMU_Cardiac_AVC_TOTAL_CROPPED',
-            'output_dir': 'Dataset003_total_cropped',
+            'output_dir': '/home/psw/AS_Radiomics/data/datasets/Dataset003_total_cropped',
             'dataset_name': 'Dataset003_total_cropped'
         }
     }

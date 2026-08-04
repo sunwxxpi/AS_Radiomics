@@ -200,7 +200,7 @@ def main():
 
     severity_map = None
     if args.severity_csv and os.path.exists(args.severity_csv):
-        # organize_total_stratified_dataset 는 저장소 루트에 있고 이 파일은 utils/ 아래다
+        # organize_total_stratified_dataset 는 data/dataprep/ 에 있고 이 파일은 그 아래 utils/ 다
         sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         from organize_total_stratified_dataset import load_severity_mapping
         severity_map = load_severity_mapping(args.severity_csv, mode='multi')

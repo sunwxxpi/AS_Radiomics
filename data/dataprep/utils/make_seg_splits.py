@@ -13,7 +13,7 @@ import sys
 
 from sklearn.model_selection import StratifiedKFold
 
-# organize_total_stratified_dataset 는 저장소 루트에 있고 이 파일은 utils/ 아래다
+# organize_total_stratified_dataset 는 data/dataprep/ 에 있고 이 파일은 그 아래 utils/ 다
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from organize_total_stratified_dataset import extract_patient_id, load_severity_mapping
 
