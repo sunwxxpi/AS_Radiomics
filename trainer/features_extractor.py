@@ -16,7 +16,8 @@ class RadiomicsExtractor:
     """
     
     def __init__(self, geometry_tolerance=1e-5, enable_dl_embedding=False, dl_model_paths=None, dl_model_type='custom', dl_nnunet_config=None,
-                 resampled_spacing=None, resample_interpolator='sitkLinear', enable_dilation=False, dilation_iterations=1):
+                 resampled_spacing=None, resample_interpolator='sitkLinear', enable_dilation=False, dilation_iterations=1,
+                 degenerate_dilation_iterations=0):
         self.extractor = featureextractor.RadiomicsFeatureExtractor()
         self.extractor.settings['geometryTolerance'] = geometry_tolerance
         # resampled_spacing 은 [x, y, z] mm. None 이면 PyRadiomics 가 리샘플링 단계를 건너뛴다.
@@ -26,6 +27,8 @@ class RadiomicsExtractor:
         self.dl_extractors = {}  # fold별 DL embedding 추출기 저장소
         self.enable_dilation = enable_dilation
         self.dilation_iterations = dilation_iterations
+        self.degenerate_dilation_iterations = degenerate_dilation_iterations
+        self.dilation_rescued_cases = []
         
         # 각 fold별 DL embedding 추출기 초기화
         if self.enable_dl_embedding and dl_model_paths:
@@ -52,8 +55,12 @@ class RadiomicsExtractor:
         logger = logging.getLogger("radiomics")
         logger.setLevel(logging.ERROR)
     
-    def _apply_dilation(self, label_path):
-        """레이블 마스크에 dilation 적용"""
+    def _apply_dilation(self, label_path, iterations=None):
+        """레이블 마스크에 dilation 적용
+
+        실패하면 원본 경로를 그대로 돌려주므로 호출부는 반환값이 인자와 같은지로 성공을 판별한다.
+        """
+        iterations = self.dilation_iterations if iterations is None else iterations
         try:
             original_img = nib.load(label_path)
             original_data = original_img.get_fdata().astype(np.uint8)
@@ -62,7 +69,7 @@ class RadiomicsExtractor:
             dilated_data = binary_dilation(
                 input=original_data,
                 structure=structure,
-                iterations=self.dilation_iterations
+                iterations=iterations
             ).astype(original_data.dtype)
             
             dilated_img = nib.Nifti1Image(
@@ -71,7 +78,7 @@ class RadiomicsExtractor:
                 header=original_img.header
             )
             
-            temp_label_path = label_path.replace('.nii.gz', f'_dilated_{self.dilation_iterations}iter_temp.nii.gz')
+            temp_label_path = label_path.replace('.nii.gz', f'_dilated_{iterations}iter_temp.nii.gz')
             nib.save(dilated_img, temp_label_path)
             
             return temp_label_path
@@ -101,7 +108,8 @@ class RadiomicsExtractor:
         features_list = []
         processed_cases = []
         skipped_cases = []
-        
+        rescued_before = len(self.dilation_rescued_cases)
+
         for image_filename in image_files:
             result = self._extract_radiomics_only(
                 image_filename, image_dir, label_dir, patient_info_map, set_name)
@@ -112,7 +120,8 @@ class RadiomicsExtractor:
             else:
                 skipped_cases.append(result['case_id'])
         
-        self._print_extraction_summary(set_name, processed_cases, skipped_cases)
+        self._print_extraction_summary(set_name, processed_cases, skipped_cases,
+                                       self.dilation_rescued_cases[rescued_before:])
         
         if not features_list:
             return pd.DataFrame()
@@ -156,7 +165,8 @@ class RadiomicsExtractor:
         # Dilation 적용 (필요한 경우)
         final_label_path = label_path
         temp_label_path = None
-        
+        rescued_by_dilation = False
+
         if self.enable_dilation:
             final_label_path = self._apply_dilation(label_path)
             if final_label_path != label_path:
@@ -164,7 +174,21 @@ class RadiomicsExtractor:
         
         # Radiomics 특징 추출
         try:
-            result = self.extractor.execute(image_path, final_label_path, label=1)
+            try:
+                result = self.extractor.execute(image_path, final_label_path, label=1)
+            except Exception as first_error:
+                # 리샘플링 후 선·점으로 축퇴한 마스크만 되살린다. 전역 dilation 은 멀쩡한 케이스의 특징까지 바꾼다.
+                if temp_label_path is not None or self.degenerate_dilation_iterations <= 0:
+                    raise
+                print(f"      추출 실패 ({first_error})")
+                print(f"      마스크를 {self.degenerate_dilation_iterations}회 팽창시켜 재시도")
+                final_label_path = self._apply_dilation(label_path, self.degenerate_dilation_iterations)
+                if final_label_path == label_path:
+                    raise
+                temp_label_path = final_label_path
+                result = self.extractor.execute(image_path, final_label_path, label=1)
+                rescued_by_dilation = True
+
             features = {key: val for key, val in result.items() if not key.startswith('diagnostics_')}
             
             features['case_id'] = case_id
@@ -177,7 +201,12 @@ class RadiomicsExtractor:
             radiomics_count = len([k for k in features.keys() 
                                  if k not in ['case_id', 'severity', 'image_path', 'data_source']])
             
-            print(f"      성공: {radiomics_count}개 radiomics 특징 추출")
+            if rescued_by_dilation:
+                self.dilation_rescued_cases.append(case_id)
+                print(f"      성공: {radiomics_count}개 radiomics 특징 추출 "
+                      f"(마스크 {self.degenerate_dilation_iterations}회 팽창본)")
+            else:
+                print(f"      성공: {radiomics_count}개 radiomics 특징 추출")
             
             # 임시 파일 정리
             if temp_label_path and os.path.exists(temp_label_path):
@@ -243,7 +272,7 @@ class RadiomicsExtractor:
         
         return result_df
     
-    def _print_extraction_summary(self, set_name, processed_cases, skipped_cases):
+    def _print_extraction_summary(self, set_name, processed_cases, skipped_cases, rescued_cases=()):
         """특징 추출 결과 요약 출력"""
         print(f"\n    --- '{set_name}' 세트 특징 추출 요약 ---")
         print(f"    성공적으로 처리된 케이스 수: {len(processed_cases)}")
@@ -251,6 +280,11 @@ class RadiomicsExtractor:
         unique_skipped = sorted(list(set(skipped_cases)))
         if unique_skipped:
             print(f"    건너뛴 고유 케이스 수: {len(unique_skipped)}")
+
+        if rescued_cases:
+            print(f"    마스크 팽창으로 되살린 케이스 수: {len(rescued_cases)}")
+            for case_id in sorted(rescued_cases):
+                print(f"      - {case_id}")
 
     # 기존 extract_features_for_set 메소드는 하위 호환성을 위해 유지
     def extract_features_for_set(self, image_dir, label_dir, set_name, patient_info_map, mode='binary'):

@@ -53,6 +53,10 @@ class Config:
     # Dilation 설정
     ENABLE_DILATION = False   # Dilation 사용 여부
     DILATION_ITERATIONS = 1   # Dilation 반복 횟수
+
+    # 리샘플링 후 선·점으로 축퇴해 PyRadiomics 가 거부하는 마스크만 팽창시켜 한 번 재시도한다.
+    # 0 이면 그대로 실패시킨다. ENABLE_DILATION 과 달리 실패한 케이스에만 걸린다.
+    DEGENERATE_MASK_DILATION_ITERATIONS = 1
     
     @classmethod
     def get_dl_model_paths(cls):
@@ -266,6 +270,10 @@ class Config:
         print(f"Dilation 사용: {cls.ENABLE_DILATION}")
         if cls.ENABLE_DILATION:
             print(f"Dilation 반복 횟수: {cls.DILATION_ITERATIONS}")
+        if cls.DEGENERATE_MASK_DILATION_ITERATIONS > 0:
+            print(f"축퇴 마스크 팽창 재시도: {cls.DEGENERATE_MASK_DILATION_ITERATIONS}회")
+        else:
+            print("축퇴 마스크 팽창 재시도: 미적용")
         print(f"DL Embedding 사용: {cls.ENABLE_DL_EMBEDDING}")
         if cls.ENABLE_DL_EMBEDDING:
             fusion_type = "Gated Fusion" if cls.USE_GATED_FUSION else "일반 Concat"

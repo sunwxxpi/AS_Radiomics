@@ -101,7 +101,8 @@ def run_pipeline():
             resampled_spacing=Config.RESAMPLED_SPACING,
             resample_interpolator=Config.RESAMPLE_INTERPOLATOR,
             enable_dilation=Config.ENABLE_DILATION,
-            dilation_iterations=Config.DILATION_ITERATIONS
+            dilation_iterations=Config.DILATION_ITERATIONS,
+            degenerate_dilation_iterations=Config.DEGENERATE_MASK_DILATION_ITERATIONS
         )
         
         # 4. Radiomics 특징 추출 (한 번만)
