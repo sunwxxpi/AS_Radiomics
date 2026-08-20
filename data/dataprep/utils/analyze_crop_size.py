@@ -183,7 +183,8 @@ def report(df, boxes_mm):
 
 def main():
     parser = argparse.ArgumentParser(description='crop 크기 결정용 마스크 기하 실측')
-    parser.add_argument('--gt_dir', default='/home/psw/AS_Radiomics/data/datasets/Dataset001_KMU_Cardiac_AVC_TRAIN_ONLY/labelsTr')
+    parser.add_argument('--gt_dir', nargs='+',
+                        default=['/home/psw/AS_Radiomics/data/datasets/Dataset001_KMU_Cardiac_AVC_TRAIN_ONLY/labelsTr'])
     parser.add_argument('--pred_dir', nargs='+',
                         default=['/home/psw/AS_Radiomics/data/datasets/Dataset003_total/labelsTr',
                                  '/home/psw/AS_Radiomics/data/datasets/Dataset003_total/labelsVal'])
@@ -205,7 +206,7 @@ def main():
         from organize_total_stratified_dataset import load_severity_mapping
         severity_map = load_severity_mapping(args.severity_csv, mode='multi')
 
-    gt_map = index_masks([args.gt_dir])
+    gt_map = index_masks(args.gt_dir)
     pred_map = index_masks(args.pred_dir)
 
     df, _ = collect(gt_map, pred_map, boxes_mm)

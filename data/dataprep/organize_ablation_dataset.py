@@ -1,4 +1,4 @@
-"""Dataset004_ablation_gt 생성 — test 83건을 전원 GT 마스크 보유 환자로 재분할한다.
+"""Dataset004_gt 생성 — test 83건을 전원 GT 마스크 보유 환자로 재분할한다.
 
 파일 번호는 406건 기준으로 여기서 한 번 확정되고, 이후 예측 마스크 데이터셋(_pred)도 같은 번호를 쓴다.
 GT 마스크는 파일명이 아니라 patient_id 로 조인한다 — 4자리 시퀀스 번호가 데이터셋별 자체 일련번호라
@@ -273,14 +273,14 @@ def print_summary(train_rows, val_rows):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--csv_path', default='/home/psw/AS_Radiomics/data/AS_CRF.csv')
-    parser.add_argument('--output_dir', default='/home/psw/AS_Radiomics/data/datasets/Dataset004_ablation_gt')
-    parser.add_argument('--info_csv_name', default='Dataset004_ablation_info.csv')
+    parser.add_argument('--output_dir', default='/home/psw/AS_Radiomics/data/datasets/Dataset004_gt')
+    parser.add_argument('--info_csv_name', default='Dataset004_info.csv')
     parser.add_argument('--random_state', type=int, default=42)
     parser.add_argument('--dry_run', action='store_true',
                         help='분할과 파일명만 계산하고 복사는 하지 않는다')
     args = parser.parse_args()
 
-    print("=== Dataset004_ablation_gt 생성 ===")
+    print("=== Dataset004_gt 생성 ===")
     print(f"이미지 소스: {TOTAL_DIR}/imagesVal")
     print(f"GT 마스크 소스: {GT_DIR}/labelsTr")
     print(f"출력: {args.output_dir}")
