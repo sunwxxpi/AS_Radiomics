@@ -18,3 +18,5 @@ data/datasets_raw/
 DL_Classification/logs/
 DL_Classification/weights/
 DL_Classification/results/
+
+deprecated
