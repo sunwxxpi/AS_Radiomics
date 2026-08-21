@@ -49,6 +49,9 @@ def load_config():
     parser.add_argument('--num_classes', type=int, default=3)
     parser.add_argument('--fold', type=int, default=5)
     parser.add_argument('--epochs', type=int, default=150)
+    parser.add_argument('--stage', type=str, default='all', choices=['all', 'folds', 'refit'],
+                       help="학습·평가 대상. all: 5-fold 와 refit 둘 다, folds: 5-fold 만, "
+                            "refit: refit 만 (학습은 fold_best_epochs.csv 에서 종료 epoch 을 읽는다)")
     parser.add_argument('--log_step', type=int, default=1)
 
     # MODEL TYPE SELECTION
