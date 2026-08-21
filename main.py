@@ -28,22 +28,26 @@ def run_pipeline():
     """
     # 설정 및 로깅 초기화
     output_dir = Config.ensure_output_dir()
-    logger = setup_logging(output_dir)
+    setup_logging(output_dir)
 
     try:
         print("--- Radiomics 분석 파이프라인 시작 ---\n")
 
         # Ensemble 사전 검증
         if Config.USE_ENSEMBLE and not Config.ENABLE_DL_EMBEDDING:
-            print("오류: Ensemble을 사용하려면 DL Embedding이 활성화되어야 합니다.")
-            print("config.py에서 ENABLE_DL_EMBEDDING = True로 설정해주세요.")
-            return
+            raise RuntimeError("Ensemble을 사용하려면 DL Embedding이 활성화되어야 합니다. "
+                               "config.py에서 ENABLE_DL_EMBEDDING = True로 설정해주세요.")
         
         # Gated Fusion 사전 검증
         if Config.USE_GATED_FUSION and not Config.ENABLE_DL_EMBEDDING:
-            print("오류: Gated Fusion을 사용하려면 DL Embedding이 활성화되어야 합니다.")
-            print("config.py에서 ENABLE_DL_EMBEDDING = True로 설정해주세요.")
-            return
+            raise RuntimeError("Gated Fusion을 사용하려면 DL Embedding이 활성화되어야 합니다. "
+                               "config.py에서 ENABLE_DL_EMBEDDING = True로 설정해주세요.")
+
+        # 특징 추출을 다 끝낸 뒤 앙상블 단계에서야 걸리면 그 시간을 통째로 버린다.
+        unknown_models = [name for name in Config.CLASSIFICATION_MODELS
+                          if name not in Config.get_available_classification_models()]
+        if not Config.CLASSIFICATION_MODELS or unknown_models:
+            raise RuntimeError(f"CLASSIFICATION_MODELS 를 쓸 수 없습니다: {Config.CLASSIFICATION_MODELS}")
 
         # 설정 요약 출력
         Config.print_config_summary()
@@ -72,26 +76,13 @@ def run_pipeline():
                 missing_models.append(f"fold 배정: {fold_assignment_path}")
             
             if missing_models:
-                print(f"  경고: 다음 DL 산출물을 찾을 수 없습니다:")
-                for missing in missing_models:
-                    print(f"    - {missing}")
-                
-                if len(missing_models) == len(dl_model_paths) + 1:
-                    print("  모든 DL 모델이 없으므로 DL embedding 없이 계속 진행합니다.")
-                    Config.ENABLE_DL_EMBEDDING = False
-                    dl_model_paths = {}
-                    # DL 의존 경로도 함께 끈다. Gated Fusion 은 run_fold_analysis 에서
-                    # ENABLE_DL_EMBEDDING 이 아닌 USE_GATED_FUSION 만 보고 분기하므로, 켜둔 채로 두면
-                    # DL embedding 없는 Radiomics 전용 특징이 Gated Fusion 으로 흘러가 시작 검증이
-                    # 막던 금지 상태를 재생성한다.
-                    if Config.USE_GATED_FUSION or Config.USE_ENSEMBLE:
-                        print("  Gated Fusion / Ensemble 도 비활성화하고 Radiomics 전용으로 진행합니다.")
-                        Config.USE_GATED_FUSION = False
-                        Config.USE_ENSEMBLE = False
-                else:
-                    # OOF 는 development 케이스마다 자기 fold 모델이 있어야 성립한다.
-                    # 빠진 행만 radiomics 로 남으면 다음 단계가 특징 개수를 착각한 채 돈다.
-                    raise RuntimeError("DL 산출물이 일부만 있어 OOF embedding 을 만들 수 없습니다.")
+                # OOF 는 development 케이스마다 자기 fold 모델이 있어야 성립하니 하나만 없어도 못 돈다.
+                # 여기서 플래그를 내려 Radiomics 전용으로 이어가면 출력 디렉토리 이름과 설정 요약이 이미
+                # gated/ensemble 로 찍힌 뒤라, 융합 결과로 읽히는 산출물이 성공 종료로 남는다.
+                raise RuntimeError(
+                    "DL 산출물을 찾을 수 없어 OOF embedding 을 만들 수 없습니다:\n  - "
+                    + "\n  - ".join(missing_models)
+                )
         else:
             print("  DL Embedding 비활성화")
             
@@ -129,6 +120,10 @@ def run_pipeline():
         print("\n  TR_DIR과 VAL_DIR Radiomics 특징 병합 중...")
         radiomics_df = pd.concat([train_radiomics_df, val_radiomics_df], axis=0)
         print(f"  총 {len(radiomics_df)} 개의 샘플 병합됨 (TR: {len(train_radiomics_df)}, VAL: {len(val_radiomics_df)})")
+
+        # 한 건도 못 뽑았는데 이어가면 빈 결과가 정상 종료로 저장된다.
+        if radiomics_df.empty:
+            raise RuntimeError(f"Radiomics 특징을 한 건도 추출하지 못했습니다: {Config.BASE_DIR}")
 
         # 5. DL embedding 특징 추가 및 분석
         if Config.ENABLE_DL_EMBEDDING and dl_model_paths:
@@ -183,10 +178,10 @@ def run_pipeline():
         print(f"오류 발생: {e}")
         import traceback
         traceback.print_exc()
+        raise
 
     finally:
         close_logging()
-        return logger
 
 def run_fold_analysis(features_df, fold_name, mode, base_output_dir):
     """Fold별 전체 분석 파이프라인
@@ -194,7 +189,7 @@ def run_fold_analysis(features_df, fold_name, mode, base_output_dir):
     프로세스:
         1. 데이터 분할 (train/validation)
         2. 특징 정규화 및 선택 (LASSO 등)
-        3. ML 분류기 학습 (LR, SVM, RF, GB, KNN, NB)
+        3. ML 분류기 학습 (LR, MLP1, MLP2)
         4. 성능 평가 및 시각화
         5. 결과 저장
 
@@ -292,15 +287,13 @@ def run_fold_analysis(features_df, fold_name, mode, base_output_dir):
 
             except Exception as ensemble_error:
                 print(f"  {fold_name} Ensemble 중 오류 발생: {ensemble_error}")
-                import traceback
-                traceback.print_exc()
+                raise
 
         print(f"  {fold_name} 분석 완료!")
 
     except Exception as e:
         print(f"  {fold_name} 분석 중 오류 발생: {e}")
-        import traceback
-        traceback.print_exc()
+        raise
 
 if __name__ == "__main__":
     run_pipeline()

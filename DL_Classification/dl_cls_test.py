@@ -316,7 +316,11 @@ def main():
     if config.stage in ('all', 'refit'):
         print(f"\n{'='*20} refit 평가 시작 {'='*20}")
         model_path = os.path.join(config.model_path, config.writer_comment, 'refit', 'refit_model.pth')
-        evaluate_weights(config, model_path, test_loader, device, 'refit', class_names, should_save_cam)
+        if evaluate_weights(config, model_path, test_loader, device, 'refit', class_names, should_save_cam) is None:
+            # 융합 갈래가 읽는 DL 확률은 refit 것 하나뿐이라, 건너뛰면 probs/refit.csv 없이 성공 종료한다.
+            raise FileNotFoundError(
+                f"refit 가중치가 없어 test 추론을 할 수 없다: {model_path} — dl_cls_train.py 를 --stage refit 으로 먼저 돌린다"
+            )
 
 
 if __name__ == '__main__':

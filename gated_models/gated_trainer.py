@@ -115,6 +115,8 @@ class GatedFusionTrainer:
         logger = logging.getLogger(f'gated_trainer_{self.output_dir}')
         logger.setLevel(logging.INFO)
         logger.handlers.clear()
+        # 아래 두 핸들러가 직접 내보내므로 root 로 올리면 같은 줄이 두 번 찍힌다.
+        logger.propagate = False
 
         # 포매터 설정
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')

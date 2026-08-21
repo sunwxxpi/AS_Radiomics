@@ -22,9 +22,9 @@ class ModelTrainer:
         print("--- 모델 학습 시작 ---")
         print(f"  사용할 모델: {list(self.models.keys())}")
 
+        # 빈 결과를 돌려주면 호출부가 모델 행이 통째로 빠진 요약을 정상 종료로 저장한다.
         if x_train.empty or len(y_train) == 0:
-            print("  오류: 학습 데이터가 비어있습니다.")
-            return self.results, self.prediction_results
+            raise RuntimeError("학습 데이터가 비어 있어 모델을 학습할 수 없습니다.")
 
         num_unique_classes = len(np.unique(y_train))
         if num_unique_classes < 2:

@@ -18,7 +18,8 @@ tensorboard --logdir DL_Classification/logs/{writer_comment}
 
 `{writer_comment}` 는 `config.py` 의 `Config.DL_COMMENT_WRITER` 하나가 정한다 — `{model_type}_{D}_{H}_{W}_{BASE_DIR 폴더 이름}` 이다.
 `--model_type` · `--img_size` · `--model_path` 는 `config.py` 의 `DL_MODEL_TYPE` · `DL_IMG_SIZE` · `DL_WEIGHTS_ROOT` 를 그대로 받는다.
-다른 값을 주면 경로가 어긋나므로 시작 전에 멈춘다. 모델과 입력 크기는 `config.py` 에서 바꾸고, `main.py` 도 이 이름으로 DL 산출물을 찾는다.
+`--fold` 는 `DL_NUM_FOLDS` 를, 분할 인자 셋(`--data_split_mode` · `--data_split_random_state` · `--test_size_ratio`)은 대문자 같은 이름을 받는다.
+다른 값을 주면 경로나 분할이 어긋나므로 시작 전에 멈춘다. 모델·입력 크기·분할은 `config.py` 에서 바꾸고, `main.py` 도 이 이름으로 DL 산출물을 찾는다.
 
 `dl_cls_train.py` 는 5-fold 를 돌린 뒤 development 전체로 refit 까지 이어서 한다 — GPU 학습 6회다.
 `--stage folds` / `--stage refit` 로 끊어 돌릴 수 있고, `refit` 은 5-fold 가 남긴 `weights/{writer_comment}/fold_best_epochs.csv` 를 읽어 종료 epoch 을 정한다.
@@ -32,10 +33,12 @@ fold 가중치가 남아 있거나 `--resume` 이면 이미 있는 `cls_fold_ass
 `fold_best_epochs.csv` 에는 그때 쓴 학습 인자가 `arg_*` 컬럼으로 함께 적힌다.
 빠지는 것은 경로를 정하는 `--model_path` 와 단계마다 달라지는 `--stage` · `--resume` · `--enable_cam` · `--save_model` 뿐이다.
 하나라도 지금 값과 다르면 `--resume` 도 `--stage refit` 도 그 기록을 읽지 않고 멈추므로, 이어 돌릴 때는 fold 를 돌릴 때 쓴 인자를 그대로 다시 넘긴다.
-`--stage refit` 은 fold 다섯 줄이 다 있어야 읽는다.
+`--stage refit` 은 fold 가 `DL_NUM_FOLDS` 만큼 다 적혀 있어야 읽는다.
+`--resume` 으로 이어 돌리면 가중치가 사라진 fold 의 줄은 기록에서 빠지므로, CSV 만 다 돈 것처럼 남지 않는다.
 
 `dl_cls_test.py` 도 같은 `--stage` 를 받는다. test 추론은 refit 모델 하나로 하고, fold 5개 평가는 DL 팔 내부 점검용이다.
 융합 갈래가 읽는 DL 확률은 refit 것(`results/{writer_comment}/probs/refit.csv`) 하나다.
+refit 가중치가 없으면 그 자리에서 멈춘다 — 그 파일 없이 성공으로 끝나지 않는다. fold 평가는 가중치가 없는 fold 만 건너뛴다.
 
 `main.py` 의 갈래는 `config.py` 의 세 플래그로 정한다.
 
@@ -48,8 +51,9 @@ fold 가중치가 남아 있거나 `--resume` 이면 이미 있는 `cls_fold_ass
 
 - DL 임베딩은 케이스마다 출처가 다르다. development 행은 그 행을 검증으로 뺀 fold 모델(OOF)로, test 행은 refit 모델로 뽑는다. 임베딩은 한 벌이다.
   development 행에 그 행을 학습에 쓴 모델의 임베딩을 주면 융합 분류기가 test 에는 없을 과적합된 표현 위에서 학습된다.
-  배정은 `weights/{writer_comment}/cls_fold_assignment.csv` 를 따르고, 산출물이 일부만 있거나 배정과 어긋나는 케이스가 있으면 추출 전에 멈춘다.
-  반대로 전부 없으면 멈추지 않고 세 플래그를 모두 False 로 되돌려 Radiomics 단독으로 진행한다. 결과 디렉토리 이름은 플래그를 되돌리기 전에 정해지므로 `_gated`/`_ensemble` 이 남은 채 그 산출물만 없다.
+  배정은 `weights/{writer_comment}/cls_fold_assignment.csv` 를 따르고, 산출물이 하나라도 없거나 배정과 어긋나는 케이스가 있으면 추출 전에 멈춘다.
+  전부 없을 때도 갈래를 바꾸지 않는다. Radiomics 단독으로 돌릴 생각이면 `ENABLE_DL_EMBEDDING` 을 직접 내린다.
+  결과 디렉토리 이름과 설정 요약은 그 전에 정해지므로, 플래그를 대신 내려 주면 `_gated`/`_ensemble` 이 붙은 이름 아래 Radiomics 단독 결과가 남는다.
 - 데이터 분할은 고정 hold-out 이고 교차검증이 아니다.
 - Gated 를 켜면 Ensemble 은 실행되지 않는다 — `main.py` 가 gated 분석 직후 반환한다.
 - Gated 는 two-stage 다. Stage 1 이 `GatedFusionLayer` + MLP 를 학습하고, Stage 2 가 fused feature(radiomics 107 + DL 320 = 427)로 LR/MLP1/MLP2 를 학습한다.
@@ -143,6 +147,7 @@ DL 학습/평가는 `DL_Classification/dl_cls_config.py` 의 argparse 를 쓰지
 | `USE_GATED_FUSION` / `USE_ENSEMBLE` | `False` / `False` | 융합 방식 선택 |
 | `DL_MODEL_TYPE` | `'nnunet'` | `'nnunet'` \| `'custom'`(MONAI ResNet50) |
 | `DL_IMG_SIZE` | `(32, 384, 320)` | (D, H, W). nnUNet 사전학습 patch size. custom 은 `(56, 448, 448)` |
+| `DL_NUM_FOLDS` | `5` | DL cross-fitting fold 수. `dl_cls_train.py --fold` 기본값이고 다른 값을 주면 시작 전에 멈춘다 |
 | `DL_COMMENT_WRITER` | `f'{type}_{D}_{H}_{W}_{DL_DATASET_TAG}'` | 가중치·결과 디렉토리 이름. `DL_DATASET_TAG` 가 `BASE_DIR` 의 폴더 이름이라 데이터셋을 바꾸면 이름도 같이 바뀐다 |
 | `RESAMPLED_SPACING` | `[0.3828125, 0.3828125, 3.0]` | radiomics 추출 전 목표 spacing `[x, y, z]` mm. `None` 이면 원본 |
 | `ENABLE_DILATION` / `DILATION_ITERATIONS` | `False` / `1` | 마스크 팽창. 켜면 결과 디렉토리 이름에 `_dil{N}` 이 붙는다 |

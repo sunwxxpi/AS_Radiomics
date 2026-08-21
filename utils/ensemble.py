@@ -106,14 +106,39 @@ class SoftVotingEnsemble:
 
         # 3. case_id 교집합 확인
         common_cases = df_dl.index.intersection(df_radiomics.index)
-        logger.info(f"공통 케이스 수: {len(common_cases)}")
 
         if len(common_cases) == 0:
             raise ValueError("DL과 Radiomics 결과에 공통 케이스가 없습니다.")
 
+        # 한쪽에만 있는 case_id 를 버리면 평가 표본이 조용히 줄어 held-out test 전량 기준이 아니게 된다.
+        # 갈래끼리 짝지어 견주는 비교도 서로 다른 케이스 집합 위에서 이뤄진다.
+        dl_only = df_dl.index.difference(df_radiomics.index)
+        radiomics_only = df_radiomics.index.difference(df_dl.index)
+        if len(dl_only) > 0 or len(radiomics_only) > 0:
+            raise ValueError(
+                "DL과 Radiomics 결과의 case_id 가 일치하지 않습니다. "
+                f"DL 에만 있는 케이스 {len(dl_only)}개 (예: {list(dl_only[:5])}), "
+                f"Radiomics 에만 있는 케이스 {len(radiomics_only)}개 (예: {list(radiomics_only[:5])})"
+            )
+
+        logger.info(f"공통 케이스 수: {len(common_cases)}")
+
         # 4. 공통 케이스만 필터링
         df_dl = df_dl.loc[common_cases]
         df_radiomics = df_radiomics.loc[common_cases]
+
+        # 정답 라벨은 DL CSV 에서만 읽으므로, 두 결과가 서로 다른 라벨을 담고 있어도 정확도만 조용히 달라진다.
+        if 'actual_label' not in df_radiomics.columns:
+            raise ValueError("Radiomics 결과에 actual_label 컬럼이 없어 DL 결과와 정답 라벨을 대조할 수 없습니다.")
+
+        label_mismatch = df_dl['true_label_str'] != df_radiomics['actual_label']
+        if label_mismatch.any():
+            mismatched_cases = label_mismatch[label_mismatch].index
+            examples = [f"{case}: DL={df_dl.at[case, 'true_label_str']} vs Radiomics={df_radiomics.at[case, 'actual_label']}"
+                        for case in mismatched_cases[:5]]
+            raise ValueError(
+                f"DL과 Radiomics 결과의 정답 라벨이 {len(mismatched_cases)}건 다릅니다 (예: {'; '.join(examples)})"
+            )
 
         # 5. Ensemble 결과 저장용 데이터프레임 초기화
         results = pd.DataFrame(index=common_cases)
@@ -125,13 +150,25 @@ class SoftVotingEnsemble:
             results[f'DL_proba_{label}'] = df_dl[f'proba_{label}']
 
         # 7. 각 ML 모델의 확률값 추가
+        # 컬럼이 빠진 채로 넘어가면 그 모델이 앙상블 평균에서 조용히 빠져 DL 과 수치가 똑같은 가짜 2-모델 행이 요약에 남는다.
+        missing_cols = []
         for model in models:
             for label in self.class_labels:
                 col_name = f'{model}_{label}_probability'
-                if col_name in df_radiomics.columns:
-                    results[f'{model}_proba_{label}'] = df_radiomics[col_name]
-                else:
-                    logger.warning(f"컬럼을 찾을 수 없음: {col_name}")
+                if col_name not in df_radiomics.columns:
+                    missing_cols.append(col_name)
+            pred_col = f'{model}_predicted'
+            if pred_col not in df_radiomics.columns:
+                missing_cols.append(pred_col)
+
+        if missing_cols:
+            raise ValueError(
+                f"Radiomics 결과에 필요한 컬럼이 없습니다: {', '.join(missing_cols)}"
+            )
+
+        for model in models:
+            for label in self.class_labels:
+                results[f'{model}_proba_{label}'] = df_radiomics[f'{model}_{label}_probability']
 
         # 8. 다양한 앙상블 조합 계산
         ensemble_configs = self._create_ensemble_configs(models)
@@ -162,8 +199,7 @@ class SoftVotingEnsemble:
         # ML 모델 예측 (원본 CSV에서 가져오기)
         for model in models:
             pred_col = f'{model}_predicted'
-            if pred_col in df_radiomics.columns:
-                results[pred_col] = df_radiomics.loc[common_cases, pred_col]
+            results[pred_col] = df_radiomics.loc[common_cases, pred_col]
 
         # 11. 성능 메트릭 계산
         metrics = self._calculate_metrics(results, all_ensembles, models)
