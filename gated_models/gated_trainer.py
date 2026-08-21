@@ -98,6 +98,9 @@ class GatedFusionTrainer:
         self.scaler_radiomics = StandardScaler()
         self.scaler_dl = StandardScaler()
         self.label_encoder = LabelEncoder()
+        self.radiomics_cols = None
+        self.dl_cols = None
+        self.fitted_fold = None
 
         # Random seed 고정
         set_seed(self.random_seed)
@@ -128,17 +131,24 @@ class GatedFusionTrainer:
 
         self.logger = logger
 
-    def prepare_data(self, features_df):
-        """데이터 전처리 및 분할
+    def prepare_data(self, features_df, fit=True):
+        """특징 컬럼을 가르고 라벨을 인코딩한다 — 정규화는 하지 않는다.
+
+        정규화를 여기서 하면 fold 를 가르기 전에 전체 통계로 맞춰져 각 fold 의 val 이 자기 통계를 포함한 기준으로 정규화된다.
+        스케일러는 fold 의 train 이 정해진 뒤 `fit_fold_scalers` 로 맞추고 `apply_scalers` 로 건다.
 
         Args:
             features_df (pd.DataFrame): Radiomics + DL features DataFrame
                 - 'case_id', 'severity', 'data_source' 컬럼 포함
                 - radiomics features: 'original_*', 'wavelet_*' 등
                 - dl features: 'dl_embedding_feature_*'
+            fit (bool): True 면 특징 컬럼 목록과 라벨 인코더를 이 데이터로 정한다. test 는 False 다.
 
         Returns:
-            dict: 전처리된 데이터
+            dict: 정규화 전 특징 배열과 인코딩된 라벨
+
+        Raises:
+            ValueError: `fit=False` 인데 아직 맞춘 적이 없거나 특징 컬럼이 학습 때와 다를 때.
         """
         self.logger.info("데이터 전처리 시작...")
 
@@ -156,34 +166,60 @@ class GatedFusionTrainer:
         self.logger.info(f"Radiomics 특징 수: {len(radiomics_cols)}")
         self.logger.info(f"DL embedding 특징 수: {len(dl_cols)}")
 
+        if fit:
+            self.radiomics_cols = radiomics_cols
+            self.dl_cols = dl_cols
+        elif self.radiomics_cols is None:
+            raise ValueError("fit=True 로 한 번 맞춘 뒤에야 fit=False 를 쓸 수 있습니다.")
+        elif radiomics_cols != self.radiomics_cols or dl_cols != self.dl_cols:
+            raise ValueError("학습 때와 특징 컬럼이 달라 맞춰 둔 스케일러를 적용할 수 없습니다.")
+
         # 특징 추출
         X_radiomics = features_df[radiomics_cols].values
         X_dl = features_df[dl_cols].values
         y = features_df['severity'].values
 
         # 레이블 인코딩
-        desired_order = ['normal', 'nonsevere', 'severe']
-        unique_classes = np.unique(y)
-        classes_to_fit = [cls for cls in desired_order if cls in unique_classes]
-        remaining_classes = sorted([cls for cls in unique_classes if cls not in desired_order])
-        classes_to_fit.extend(remaining_classes)
+        if fit:
+            desired_order = ['normal', 'nonsevere', 'severe']
+            unique_classes = np.unique(y)
+            classes_to_fit = [cls for cls in desired_order if cls in unique_classes]
+            remaining_classes = sorted([cls for cls in unique_classes if cls not in desired_order])
+            classes_to_fit.extend(remaining_classes)
 
-        self.label_encoder.classes_ = np.array(classes_to_fit, dtype=object)
+            self.label_encoder.classes_ = np.array(classes_to_fit, dtype=object)
+
         y_encoded = self.label_encoder.transform(y)
         self.logger.info(f"클래스 매핑: {dict(zip(self.label_encoder.classes_, range(len(self.label_encoder.classes_))))}")
 
-        # 정규화
-        X_radiomics_scaled = self.scaler_radiomics.fit_transform(X_radiomics)
-        X_dl_scaled = self.scaler_dl.fit_transform(X_dl)
-
         return {
-            'X_radiomics': X_radiomics_scaled,
-            'X_dl': X_dl_scaled,
+            'X_radiomics': X_radiomics,
+            'X_dl': X_dl,
             'y': y_encoded,
             'radiomics_dim': len(radiomics_cols),
             'dl_dim': len(dl_cols),
             'num_classes': len(self.label_encoder.classes_)
         }
+
+    def fit_fold_scalers(self, X_radiomics, X_dl, fold_idx):
+        """이 fold 의 train 행으로만 스케일러를 맞춘다.
+
+        같은 fold 의 모델로 하는 test 추론도 여기서 맞춘 스케일러를 그대로 써야 학습 때와 같은 기준의 입력을 본다.
+        """
+        self.scaler_radiomics.fit(X_radiomics)
+        self.scaler_dl.fit(X_dl)
+        self.fitted_fold = fold_idx
+        self.logger.info(f"Fold {fold_idx} 스케일러 적합: train {len(X_radiomics)}행")
+
+    def apply_scalers(self, X_radiomics, X_dl):
+        """맞춰 둔 스케일러를 건다.
+
+        Raises:
+            ValueError: `fit_fold_scalers` 를 아직 부르지 않았을 때.
+        """
+        if self.fitted_fold is None:
+            raise ValueError("fit_fold_scalers 로 스케일러를 맞춘 뒤에야 쓸 수 있습니다.")
+        return self.scaler_radiomics.transform(X_radiomics), self.scaler_dl.transform(X_dl)
 
     def train_fold(self, train_loader, val_loader, model, fold_idx):
         """단일 fold 학습
@@ -357,9 +393,10 @@ class GatedFusionTrainer:
             self.logger.info(f"Fold {fold_idx}/{n_folds if n_folds > 1 else 'Single'} 학습 시작")
             self.logger.info(f"{'='*50}")
 
-            # Split data
-            X_rad_train, X_rad_val = X_radiomics[train_idx], X_radiomics[val_idx]
-            X_dl_train, X_dl_val = X_dl[train_idx], X_dl[val_idx]
+            # Split data - 스케일러는 이 fold 의 train 이 정해진 뒤에 맞춘다
+            self.fit_fold_scalers(X_radiomics[train_idx], X_dl[train_idx], fold_idx)
+            X_rad_train, X_dl_train = self.apply_scalers(X_radiomics[train_idx], X_dl[train_idx])
+            X_rad_val, X_dl_val = self.apply_scalers(X_radiomics[val_idx], X_dl[val_idx])
             y_train, y_val = y[train_idx], y[val_idx]
 
             # Create datasets

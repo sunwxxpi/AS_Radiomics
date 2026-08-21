@@ -71,6 +71,10 @@ def run_gated_fusion_analysis(combined_features_df, fold_name, mode, fold_output
 
     print(f"\n  [Fold {fold_name}] Gated Fusion 학습 완료")
 
+    # 아래 test 추론과 특징 추출은 이 fold 의 체크포인트를 쓰므로 스케일러도 같은 fold 것이어야 한다.
+    if gated_trainer.fitted_fold != fold_name:
+        raise ValueError(f"스케일러가 fold {gated_trainer.fitted_fold} 것인데 fold {fold_name} 모델을 씁니다.")
+
     # ======================================================================
     # Test Set 평가 (imagesVal, data_source='val')
     # ======================================================================
@@ -88,10 +92,9 @@ def run_gated_fusion_analysis(combined_features_df, fold_name, mode, fold_output
     if test_features_df is not None and len(test_features_df) > 0:
         print(f"\n  [Fold {fold_name}] Test Set (imagesVal) 평가 중...")
 
-        # Test 데이터 전처리
-        test_data = gated_trainer.prepare_data(test_features_df)
-        X_rad_test = test_data['X_radiomics']
-        X_dl_test = test_data['X_dl']
+        # Test 데이터 전처리 - 이 fold 의 train 통계로만 정규화한다
+        test_data = gated_trainer.prepare_data(test_features_df, fit=False)
+        X_rad_test, X_dl_test = gated_trainer.apply_scalers(test_data['X_radiomics'], test_data['X_dl'])
         y_test = test_data['y']
 
         # Test dataset 생성
@@ -208,14 +211,17 @@ def run_gated_fusion_analysis(combined_features_df, fold_name, mode, fold_output
     model_config['dl_dim'] = len(dl_cols)
     model_config['num_classes'] = combined_features_df['severity'].nunique()
 
+    # train+test 를 한 번에 넘기므로 fold 의 train 으로 맞춘 스케일러를 그대로 써야 train 행까지 test 통계로 밀리지 않는다.
     gated_extractor = GatedFeatureExtractor(
         model_path=gated_model_path,
-        model_config=model_config
+        model_config=model_config,
+        scaler_radiomics=gated_trainer.scaler_radiomics,
+        scaler_dl=gated_trainer.scaler_dl
     )
 
     fused_features_df = gated_extractor.extract_features_from_dataframe(
         combined_features_df,
-        use_fitted_scaler=False
+        use_fitted_scaler=True
     )
 
     print(f"  [Fold {fold_name}] Fused Features 추출 완료: {fused_features_df.shape}")

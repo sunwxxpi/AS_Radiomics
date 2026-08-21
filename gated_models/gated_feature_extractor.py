@@ -55,12 +55,12 @@ class GatedFeatureExtractor:
         print(f"  - Validation Loss: {checkpoint.get('val_loss', 'N/A')}")
         print(f"  - Validation Accuracy: {checkpoint.get('val_acc', 'N/A')}")
 
-    def extract_features_from_dataframe(self, features_df, use_fitted_scaler=False):
+    def extract_features_from_dataframe(self, features_df, use_fitted_scaler=True):
         """DataFrame에서 fused features 추출
 
         Args:
             features_df (pd.DataFrame): Radiomics + DL features
-            use_fitted_scaler (bool): 학습된 scaler 사용 여부 (True: transform, False: fit_transform)
+            use_fitted_scaler (bool): False 면 넘긴 데이터로 scaler 를 다시 맞춘다 — train 이 아닌 집합에 쓰면 통계가 샌다.
 
         Returns:
             pd.DataFrame: Fused features DataFrame
