@@ -39,7 +39,7 @@ refit 종료 epoch 은 fold 별 best epoch 다섯 값의 중앙값이고, 같은
   배정은 `weights/{writer_comment}/cls_fold_assignment.csv` 를 따르고, 산출물이 일부만 있거나 배정과 어긋나는 케이스가 있으면 추출 전에 멈춘다.
 - 데이터 분할은 고정 hold-out 이고 교차검증이 아니다.
 - Gated 를 켜면 Ensemble 은 실행되지 않는다 — `main.py` 가 gated 분석 직후 반환한다.
-- Gated 는 two-stage 다. Stage 1 이 `GatedFusionLayer` + MLP 를 학습하고, Stage 2 가 fused feature(radiomics 107 + DL 320 = 427)로 LR/SVM/RF 를 학습한다.
+- Gated 는 two-stage 다. Stage 1 이 `GatedFusionLayer` + MLP 를 학습하고, Stage 2 가 fused feature(radiomics 107 + DL 320 = 427)로 LR/MLP1/MLP2 를 학습한다.
   Stage 1 이 조기 종료를 판단할 검증 fold 가 필요해 gated 갈래만 자기 5-fold 를 돌아 결과가 다섯 벌 나온다. 나머지 갈래는 한 벌이다.
 
 ## 데이터
@@ -129,7 +129,7 @@ segmentation 학습 자체는 이 저장소에서 돌지 않는다.
 | `RESAMPLED_SPACING` | `[0.3828125, 0.3828125, 3.0]` | radiomics 추출 전 목표 spacing `[x, y, z]` mm. `None` 이면 원본 |
 | `ENABLE_DILATION` / `DILATION_ITERATIONS` | `False` / `1` | 마스크 팽창. 켜면 결과 디렉토리 이름에 `_dil{N}` 이 붙는다 |
 | `FEATURE_SELECTION_METHOD` | `'lasso'` | `'lasso'`/`'rfe'`/`'univariate'`/`'mutual_info'`/`'random_forest'`/`'none'` |
-| `CLASSIFICATION_MODELS` | `['LR', 'SVM', 'RF']` | `'GB'`/`'KNN'`/`'NB'` 추가 가능 |
+| `CLASSIFICATION_MODELS` | `['LR', 'MLP1', 'MLP2']` | `MLP1`/`MLP2` 는 은닉층 1개/2개 `MLPClassifier`. `'SVM'`/`'RF'`/`'GB'`/`'KNN'`/`'NB'` 추가 가능 |
 | `CV_FOLDS` | `5` | 특징 선택 내부 CV 전용. 학습/평가는 hold-out 1회다 |
 
 방법별·모델별 세부 파라미터(`RFE_*`, `LASSO_*`, `SVM_*` 등)는 `config.py` 에 그대로 있다.

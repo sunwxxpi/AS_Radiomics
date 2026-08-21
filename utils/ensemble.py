@@ -59,7 +59,7 @@ class SoftVotingEnsemble:
 
         Args:
             radiomics_probs_path (str): Radiomics 분석 결과 CSV 파일 경로
-            models (List[str]): 사용할 모델 리스트 (예: ['LR', 'SVM', 'RF'])
+            models (List[str]): 사용할 모델 리스트 (예: ['LR', 'MLP1', 'MLP2'])
 
         Returns:
             Tuple[pd.DataFrame, List[str]]: (확률값 데이터프레임, 모델 리스트)
@@ -67,7 +67,7 @@ class SoftVotingEnsemble:
         df = pd.read_csv(radiomics_probs_path)
 
         if models is None:
-            models = ['LR', 'SVM', 'RF']
+            models = ['LR', 'MLP1', 'MLP2']
 
         # case_id를 인덱스로 설정
         df.set_index('case_id', inplace=True)
@@ -325,8 +325,7 @@ class SoftVotingEnsemble:
             metrics (Dict): 모델별 메트릭
             output_dir (str): 출력 디렉토리
         """
-        # 저장 순서 정의: DL, LR, RF, SVM, DL+LR, DL+RF, DL+SVM
-        model_order = ['DL', 'LR', 'RF', 'SVM', 'DL+LR', 'DL+RF', 'DL+SVM']
+        model_order = ['DL', 'LR', 'MLP1', 'MLP2', 'DL+LR', 'DL+MLP1', 'DL+MLP2']
 
         summary_data = []
 

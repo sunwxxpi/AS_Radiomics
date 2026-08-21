@@ -134,12 +134,14 @@ class Config:
     # ===============================
     # 사용 가능한 분류 모델들:
     # - 'LR': Logistic Regression (로지스틱 회귀)
+    # - 'MLP1': Multilayer Perceptron, 은닉층 1개
+    # - 'MLP2': Multilayer Perceptron, 은닉층 2개
     # - 'SVM': Support Vector Machine (서포트 벡터 머신)
     # - 'RF': Random Forest (랜덤 포레스트)
     # - 'GB': Gradient Boosting (그래디언트 부스팅)
     # - 'KNN': K-Nearest Neighbors (K-최근접 이웃)
     # - 'NB': Naive Bayes (나이브 베이즈)
-    CLASSIFICATION_MODELS = ['LR', 'SVM', 'RF']  # 사용할 모델들을 리스트로 지정
+    CLASSIFICATION_MODELS = ['LR', 'MLP1', 'MLP2']  # 사용할 모델들을 리스트로 지정
     
     # ===============================
     # 개별 모델 하이퍼파라미터
@@ -150,6 +152,20 @@ class Config:
     LR_SOLVER = 'liblinear'       # 최적화 알고리즘
     LR_C = 1.0                    # 정규화 강도 역수
     
+    # MLP 파라미터 (MLP1 · MLP2 공용, 은닉층 구성만 다르다)
+    # sklearn 은 조기 종료용 검증 분할을 가중치 초기화 뒤 난수 상태로 자르므로, 층 구성이 다르면 두 후보의 검증 행이 갈린다.
+    # 조기 종료를 끈 것은 세 후보가 같은 행을 보고 학습하게 하려는 것이고, 후보 선택은 development CV 가 한다.
+    MLP1_HIDDEN_LAYER_SIZES = (128,)       # 은닉층 1개
+    MLP2_HIDDEN_LAYER_SIZES = (128, 128)   # 은닉층 2개. 폭을 MLP1 과 맞춰 두 후보의 구조 차이를 은닉층 수 하나로 줄인다
+    MLP_ACTIVATION = 'relu'       # 은닉층 활성화 함수
+    MLP_SOLVER = 'adam'           # 최적화 알고리즘
+    MLP_ALPHA = 1.0               # L2 정규화 강도. 튜닝한 값이 아니라 두 후보에 같이 거는 고정값이다
+    MLP_LEARNING_RATE_INIT = 1e-3 # 초기 학습률
+    MLP_MAX_ITER = 2000           # 최대 epoch 수
+    MLP_EARLY_STOPPING = False    # 켜면 학습 데이터에서 검증분을 떼어 조기 종료
+    MLP_VALIDATION_FRACTION = 0.1 # 조기 종료용 검증 비율, MLP_EARLY_STOPPING 이 True 일 때만 쓰인다
+    MLP_N_ITER_NO_CHANGE = 20     # 손실이 이만큼 개선 없이 지나면 종료 (조기 종료를 켜면 검증 점수 기준)
+
     # SVM 파라미터
     SVM_C = 1.0                   # 정규화 매개변수
     SVM_KERNEL = 'rbf'            # 커널 함수
@@ -247,7 +263,7 @@ class Config:
     @classmethod
     def get_available_classification_models(cls):
         """사용 가능한 분류 모델 목록 반환"""
-        return ['LR', 'SVM', 'RF', 'GB', 'KNN', 'NB']
+        return ['LR', 'MLP1', 'MLP2', 'SVM', 'RF', 'GB', 'KNN', 'NB']
     
     @classmethod
     def get_available_classification_modes(cls):

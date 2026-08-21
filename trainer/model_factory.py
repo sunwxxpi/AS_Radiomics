@@ -2,6 +2,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
 from sklearn.naive_bayes import GaussianNB
 
 class ModelFactory:
@@ -29,6 +30,8 @@ class ModelFactory:
         """단일 모델 생성"""
         model_configs = {
             'LR': self._create_logistic_regression,
+            'MLP1': self._create_mlp1,
+            'MLP2': self._create_mlp2,
             'SVM': self._create_svm,
             'RF': self._create_random_forest,
             'GB': self._create_gradient_boosting,
@@ -50,6 +53,32 @@ class ModelFactory:
             C=self.config.LR_C
         )
     
+    def _create_mlp1(self):
+        """은닉층 1개 MLP 모델 생성"""
+        return self._create_mlp(self.config.MLP1_HIDDEN_LAYER_SIZES)
+
+    def _create_mlp2(self):
+        """은닉층 2개 MLP 모델 생성"""
+        return self._create_mlp(self.config.MLP2_HIDDEN_LAYER_SIZES)
+
+    def _create_mlp(self, hidden_layer_sizes):
+        """은닉층 구성만 다른 MLP 모델 생성
+
+        입력이 표준화되어 있다고 보고 만든다. adam 은 스케일이 어긋난 특징에서 수렴하지 않는다.
+        """
+        return MLPClassifier(
+            hidden_layer_sizes=hidden_layer_sizes,
+            activation=self.config.MLP_ACTIVATION,
+            solver=self.config.MLP_SOLVER,
+            alpha=self.config.MLP_ALPHA,
+            learning_rate_init=self.config.MLP_LEARNING_RATE_INIT,
+            max_iter=self.config.MLP_MAX_ITER,
+            early_stopping=self.config.MLP_EARLY_STOPPING,
+            validation_fraction=self.config.MLP_VALIDATION_FRACTION,
+            n_iter_no_change=self.config.MLP_N_ITER_NO_CHANGE,
+            random_state=self.config.RANDOM_STATE
+        )
+
     def _create_svm(self):
         """SVM 모델 생성"""
         return SVC(
@@ -102,4 +131,4 @@ class ModelFactory:
     
     def get_available_models(self):
         """사용 가능한 모델 목록 반환"""
-        return ['LR', 'SVM', 'RF', 'GB', 'KNN', 'NB']
+        return ['LR', 'MLP1', 'MLP2', 'SVM', 'RF', 'GB', 'KNN', 'NB']

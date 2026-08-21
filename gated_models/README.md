@@ -123,7 +123,7 @@ DL Embed [320] ──┘                  (학습된)              ↓
                                                           ↓
                                                   Selected [22~61]
                                                           ↓
-                                        ML Classifiers (기본 LR, SVM, RF)
+                                        ML Classifiers (기본 LR, MLP1, MLP2)
 ```
 
 **차원 변화**:
@@ -166,7 +166,7 @@ python main.py
 1. Radiomics + DL features 추출
 2. Fold별 Gated Fusion 모델 학습 (`USE_GATED_FUSION = True` 인 경우)
 3. Fused features 추출
-4. 전통적 ML 분류기 학습 및 평가 (기본 LR, SVM, RF; GB/KNN/NB 는 CLASSIFICATION_MODELS 에 추가해야 실행)
+4. 전통적 ML 분류기 학습 및 평가 (기본 LR, MLP1, MLP2; SVM/RF/GB/KNN/NB 는 CLASSIFICATION_MODELS 에 추가해야 실행)
 5. LASSO 특징 선택 결과 저장
 
 ### 2. 개별 모듈 사용
@@ -282,16 +282,16 @@ FEATURE_SELECTION_METHOD = 'lasso'  # LASSO 특징 선택 사용
    - 5-fold 교차검증 (DL Classification과 동일한 split 방식)
    - Fold별 독립 학습 (재현성 보장)
    - **Test Set 평가**: imagesVal 데이터로 최종 성능 평가
-     - MLP 모델 결과를 model_validation_summary.csv에 자동 병합
+     - GatedMLP 결과를 model_validation_summary.csv에 자동 병합
      - Confusion Matrix 이미지 생성
      - 예측 확률 포함한 결과 저장
 
 2. **Stage 2: 전통적 ML 분류기 학습**
    - 학습된 Gated Fusion으로 fused features 추출 (427개)
    - LASSO로 특징 선택 수행 (427개 → 22~61개, 기존 실행 산출물 실측값)
-   - LR, SVM, RF 등 전통적 분류기 학습 및 비교
+   - LR, MLP1, MLP2 등 전통적 분류기 학습 및 비교
    - ML 분류기 결과를 model_validation_summary.csv에 병합
-   - 최종 결과: MLP, LR, RF, SVM 순서로 정렬
+   - 최종 결과: GatedMLP, LR, MLP1, MLP2 순서로 정렬. GatedMLP 는 stage 1 의 torch 헤드고 MLP1·MLP2 는 fused feature 로 학습한 sklearn 분류기다
 
 ### 학습 최적화 기법
 
@@ -341,11 +341,11 @@ radiomics_analysis_results/
                 │   ├── gated_fused_features_train.csv     # 학습용 fused features
                 │   ├── gated_fused_features_test.csv      # 테스트용 fused features
                 │   ├── lasso_feature_analysis.csv         # LASSO 특징 분석 결과
-                │   ├── gated_fusion_predictions_fold_1.csv    # MLP 예측 결과 (확률 포함)
-                │   ├── MLP_confusion_matrix.png           # MLP Confusion matrix
-                │   ├── {LR,SVM,RF}_confusion_matrix.png   # ML 분류기 Confusion matrix
-                │   ├── {LR,SVM,RF}_multiclass_ROC_curve.png   # multi 모드 ROC (binary 모드는 {model}_ROC_curve.png)
-                │   ├── {LR,SVM,RF}_multiclass_PR_curve.png    # multi 모드 PR (binary 모드는 {model}_PR_curve.png)
+                │   ├── gated_fusion_predictions_fold_1.csv    # GatedMLP 예측 결과 (확률 포함)
+                │   ├── GatedMLP_confusion_matrix.png      # GatedMLP Confusion matrix
+                │   ├── {LR,MLP1,MLP2}_confusion_matrix.png # ML 분류기 Confusion matrix
+                │   ├── {LR,MLP1,MLP2}_multiclass_ROC_curve.png # multi 모드 ROC (binary 모드는 {model}_ROC_curve.png)
+                │   ├── {LR,MLP1,MLP2}_multiclass_PR_curve.png  # multi 모드 PR (binary 모드는 {model}_PR_curve.png)
                 │   ├── test_cases_prediction_results.csv  # 예측 결과
                 │   └── model_validation_summary.csv       # 성능 요약
                 ├── fold_2/
@@ -362,11 +362,11 @@ radiomics_analysis_results/
 
 1. **fold_{N}_best_model.pth**: 학습된 Gated Fusion 모델 체크포인트
 2. **gated_training.log**: 학습 과정 상세 로그
-3. **model_validation_summary.csv**: MLP 및 ML 분류기 성능 요약 (병합)
-   - MLP: Gated Fusion + Classifier (imagesVal 평가)
-   - LR, RF, SVM: fused features 로 학습한 전통적 ML 분류기 (`DATA_SPLIT_MODE='fix'` 기준 MLP 와 동일한 imagesVal 평가)
-4. **MLP_confusion_matrix.png**: MLP 모델의 Confusion Matrix 이미지
-5. **gated_fusion_predictions_fold_{N}.csv**: MLP 예측 결과 (확률 포함)
+3. **model_validation_summary.csv**: GatedMLP 및 ML 분류기 성능 요약 (병합)
+   - GatedMLP: Gated Fusion + Classifier (imagesVal 평가)
+   - LR, MLP1, MLP2: fused features 로 학습한 전통적 ML 분류기 (`DATA_SPLIT_MODE='fix'` 기준 GatedMLP 와 동일한 imagesVal 평가)
+4. **GatedMLP_confusion_matrix.png**: GatedMLP 의 Confusion Matrix 이미지
+5. **gated_fusion_predictions_fold_{N}.csv**: GatedMLP 예측 결과 (확률 포함)
 6. **lasso_feature_analysis.csv**: LASSO 특징 선택 결과
 7. **gated_fused_features_*.csv**: Fused features 데이터
 
@@ -456,7 +456,7 @@ Config.get_dl_model_paths()
 
 **Binary 분류** (2-class):
 - AUC, AP: 양성 클래스(severe) 기준 계산
-- F1-Score: LR/SVM/RF 는 Binary 방식(양성=severe), MLP 은 `gated_trainer.py` 의 `evaluate_final_performance` 가 항상 Macro 로 계산
+- F1-Score: LR/MLP1/MLP2 는 Binary 방식(양성=severe), GatedMLP 은 `gated_trainer.py` 의 `evaluate_final_performance` 가 항상 Macro 로 계산
 
 ## 통합된 파이프라인
 

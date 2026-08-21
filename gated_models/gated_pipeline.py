@@ -129,9 +129,9 @@ def run_gated_fusion_analysis(combined_features_df, fold_name, mode, fold_output
                 auc_score = roc_auc_score(y_true_bin, y_proba, average='macro', multi_class='ovr')
                 ap_score = average_precision_score(y_true_bin, y_proba, average='macro')
 
-            # MLP 모델 결과를 model_validation_summary.csv에 병합
-            mlp_results = {
-                'MLP': {
+            # gated 헤드 결과를 model_validation_summary.csv에 병합
+            gated_mlp_results = {
+                'GatedMLP': {
                     'Accuracy': test_results['accuracy'],
                     'F1': test_results['f1_macro'],
                     'AUC': auc_score,
@@ -143,16 +143,16 @@ def run_gated_fusion_analysis(combined_features_df, fold_name, mode, fold_output
             summary_path = os.path.join(fold_output_dir, 'model_validation_summary.csv')
             if os.path.exists(summary_path):
                 existing_df = pd.read_csv(summary_path, index_col='Model')
-                mlp_df = pd.DataFrame(mlp_results).T
-                mlp_df.index.name = 'Model'
-                combined_df = pd.concat([existing_df, mlp_df]).sort_index()
+                gated_mlp_df = pd.DataFrame(gated_mlp_results).T
+                gated_mlp_df.index.name = 'Model'
+                combined_df = pd.concat([existing_df, gated_mlp_df]).sort_index()
                 combined_df.to_csv(summary_path)
-                print(f"  MLP 결과를 model_validation_summary.csv에 병합: {summary_path}")
+                print(f"  GatedMLP 결과를 model_validation_summary.csv에 병합: {summary_path}")
             else:
                 # 기존 파일이 없으면 새로 생성
                 file_handler = FileHandler(fold_output_dir, 'gated_fusion')
-                file_handler.save_model_summary(mlp_results, 'model_validation_summary.csv')
-                print(f"  MLP 결과를 model_validation_summary.csv에 저장: {summary_path}")
+                file_handler.save_model_summary(gated_mlp_results, 'model_validation_summary.csv')
+                print(f"  GatedMLP 결과를 model_validation_summary.csv에 저장: {summary_path}")
 
             # Confusion Matrix 이미지 생성 (CSV 파일은 생성하지 않음)
             label_encoder = LabelEncoder()
@@ -169,8 +169,8 @@ def run_gated_fusion_analysis(combined_features_df, fold_name, mode, fold_output
                 'Confusion Matrix': test_results['confusion_matrix']
             }
 
-            plotter._plot_confusion_matrix('gated_fusion', 'MLP', test_results['confusion_matrix'], metrics)
-            print(f"  Confusion Matrix 이미지 생성: {os.path.join(fold_output_dir, 'MLP_confusion_matrix.png')}")
+            plotter._plot_confusion_matrix('gated_fusion', 'GatedMLP', test_results['confusion_matrix'], metrics)
+            print(f"  Confusion Matrix 이미지 생성: {os.path.join(fold_output_dir, 'GatedMLP_confusion_matrix.png')}")
 
             # Predictions 저장 (예측 확률 포함)
             pred_df = pd.DataFrame({
@@ -281,7 +281,7 @@ def run_gated_fusion_analysis(combined_features_df, fold_name, mode, fold_output
     # ML 분류기 결과를 기존 model_validation_summary.csv에 병합
     summary_path = os.path.join(fold_output_dir, 'model_validation_summary.csv')
     if os.path.exists(summary_path):
-        # 기존 파일 읽기 (MLP 포함)
+        # 기존 파일 읽기 (GatedMLP 포함)
         existing_df = pd.read_csv(summary_path, index_col='Model')
 
         # ML 분류기 결과 추가
@@ -295,13 +295,12 @@ def run_gated_fusion_analysis(combined_features_df, fold_name, mode, fold_output
         }).T
         ml_df.index.name = 'Model'
 
-        # 병합 및 정렬 (MLP, LR, RF, SVM 순서)
         combined_df = pd.concat([existing_df, ml_df])
         # 중복 제거 (같은 모델이 있으면 나중 것 사용)
         combined_df = combined_df[~combined_df.index.duplicated(keep='last')]
 
         # 원하는 순서로 정렬
-        desired_order = ['MLP', 'LR', 'RF', 'SVM']
+        desired_order = ['GatedMLP', 'LR', 'MLP1', 'MLP2']
         available_models = [m for m in desired_order if m in combined_df.index]
         other_models = sorted([m for m in combined_df.index if m not in desired_order])
         final_order = available_models + other_models
