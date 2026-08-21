@@ -44,7 +44,7 @@ class RadiomicsExtractor:
                         )
                         print(f"  DL embedding 추출기 초기화 완료 - Fold {fold} (IMG SIZE: {Config.DL_IMG_SIZE})\n")
                     except Exception as e:
-                        print(f"  DL embedding 추출기 초기화 실패 - Fold {fold}: {e}\n")
+                        raise RuntimeError(f"DL embedding 추출기 초기화 실패 - Fold {fold} ({model_path}): {e}") from e
                 else:
                     print(f"  경고: Fold {fold} 모델 파일을 찾을 수 없음: {model_path}\n")
         

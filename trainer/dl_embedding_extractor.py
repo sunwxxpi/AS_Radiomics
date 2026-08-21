@@ -22,17 +22,12 @@ class DLEmbeddingExtractor:
         self.embedding_dim = None
         
         # CT 정규화 설정: 인코더 학습/평가(get_as_dataset)와 동일하게 plans_file_norm 에서 로드해야
-        # frozen 인코더가 학습 때와 같은 정규화 입력을 받는다. plans 미지정 시에만 동일 fallback 사용.
+        # frozen 인코더가 학습 때와 같은 정규화 입력을 받는다.
         plans_file_norm = Config.DL_NNUNET_CONFIG.get('plans_file_norm') if Config.DL_NNUNET_CONFIG else None
-        if plans_file_norm:
-            intensity_props = load_intensity_properties_from_plans(plans_file_norm)
-        else:
-            intensity_props = {
-                'mean_intensity': 363.5522766113281,
-                'std_intensity': 249.69992065429688,
-                'lower_bound': 130.0,
-                'upper_bound': 1298.0
-            }
+        if not plans_file_norm:
+            raise ValueError("DL_NNUNET_CONFIG 의 'plans_file_norm' 이 필요하다 — 상수를 대신 쓰면 인코더가 학습 때와 다른 정규화 입력을 받는다")
+
+        intensity_props = load_intensity_properties_from_plans(plans_file_norm)
         self.ct_normalization = CTNormalization(**intensity_props)
         
         # 전처리 파이프라인 설정
@@ -59,12 +54,14 @@ class DLEmbeddingExtractor:
             raise RuntimeError(f"이미지 로딩 실패: {e}")
     
     def _load_model(self):
-        """모델 로드 및 키 매핑 처리"""
+        """모델 로드 및 키 매핑 처리
+
+        실패하면 예외를 올린다. 가중치 없는 추출기를 만들어 두면 그 fold 의 첫 행을 뽑을 때까지 실패가 드러나지 않는다.
+        """
         print(f"  DL 모델 로딩 중: {self.model_path}")
         
         if not os.path.exists(self.model_path):
-            print(f"    오류: 모델 파일이 존재하지 않음: {self.model_path}")
-            return
+            raise FileNotFoundError(f"DL 모델 파일이 존재하지 않는다: {self.model_path}")
         
         try:
             # 체크포인트 로드
@@ -99,8 +96,7 @@ class DLEmbeddingExtractor:
             print(f"  DL 모델 로딩 완료 (Device: {self.device}, Classes: {num_classes}, Embedding Dim: {self.embedding_dim})")
             
         except Exception as e:
-            print(f"  ⚠️ 오류: DL 모델 로딩 실패 - {e}")
-            self.full_model = None
+            raise RuntimeError(f"DL 모델 로딩 실패 ({self.model_path}): {e}") from e
     
     def _extract_num_classes_from_checkpoint(self, checkpoint):
         """체크포인트에서 classifier의 구조를 분석하여 num_classes 추출"""
@@ -164,23 +160,22 @@ class DLEmbeddingExtractor:
         return mapped_state_dict
     
     def _calculate_embedding_dimension(self):
-        """Embedding 차원 계산"""
-        if self.full_model is None:
-            return
+        """Embedding 차원 계산
+
+        분류 헤드가 nn.Linear 한 장일 때만 in_features 로 차원이 잡힌다. 값을 추정해 넘기면 그 차원이 특징 개수 검사를 그대로 통과한다.
+        """
+        if self.model_type == 'custom':
+            if hasattr(self.full_model, 'classifier') and hasattr(self.full_model.classifier, 'in_features'):
+                self.embedding_dim = self.full_model.classifier.in_features
+            elif hasattr(self.full_model, 'in_features'):
+                self.embedding_dim = self.full_model.in_features
+        elif self.model_type == 'nnunet':
+            if hasattr(self.full_model, 'classifier') and hasattr(self.full_model.classifier, 'in_features'):
+                self.embedding_dim = self.full_model.classifier.in_features
         
-        try:
-            if self.model_type == 'custom':
-                if hasattr(self.full_model, 'classifier') and hasattr(self.full_model.classifier, 'in_features'):
-                    self.embedding_dim = self.full_model.classifier.in_features
-                elif hasattr(self.full_model, 'in_features'):
-                    self.embedding_dim = self.full_model.in_features
-                else:
-                    self.embedding_dim = 2048
-            elif self.model_type == 'nnunet':
-                if hasattr(self.full_model, 'classifier') and hasattr(self.full_model.classifier, 'in_features'):
-                    self.embedding_dim = self.full_model.classifier.in_features
-        except Exception:
-            self.embedding_dim = 2048 if self.model_type == 'custom' else None
+        if self.embedding_dim is None:
+            raise RuntimeError(f"embedding 차원을 정할 수 없다 (model_type={self.model_type}, "
+                               f"classifier={type(getattr(self.full_model, 'classifier', None)).__name__})")
     
     def extract_features_for_case(self, image_path, case_id):
         """단일 케이스에 대한 DL embedding 특징 추출"""

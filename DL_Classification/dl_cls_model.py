@@ -95,7 +95,11 @@ class nnUNetClassificationModel(nn.Module):
         self.classifier = nn.Linear(feature_dim, num_classes)
     
     def _load_pretrained_backbone(self, encoder_config):
-        """Load nnUNet backbone (with or without pretrained weights)"""
+        """사전학습된 nnUNet backbone 을 로드한다.
+
+        체크포인트가 없거나, 로드에 실패하거나, 키가 아키텍처와 어긋나 encoder 가 채워지지 않으면 예외로 멈춘다.
+        무작위 초기화로 이어가면 사전학습 없이 학습된 사실이 로그에만 남아 성능 저하의 원인을 놓치게 된다.
+        """
         plans_file_arch = encoder_config.get('plans_file_arch')
         dataset_json_file = encoder_config.get('dataset_json_file')
         checkpoint_file = encoder_config.get('checkpoint_file')
@@ -121,30 +125,51 @@ class nnUNetClassificationModel(nn.Module):
             deep_supervision=True
         )
 
-        # 체크포인트 파일이 있고 존재하는 경우만 가중치 로드
-        if checkpoint_file and os.path.exists(checkpoint_file):
-            print(f"Loading checkpoint from: {checkpoint_file}")
-            try:
-                checkpoint = torch.load(checkpoint_file, map_location=torch.device('cpu'), weights_only=False)
+        if not checkpoint_file:
+            raise ValueError("No checkpoint file specified in the nnUNet encoder config")
 
-                # Checkpoint 유효성 검증
-                if 'network_weights' not in checkpoint:
-                    raise ValueError("Invalid checkpoint: 'network_weights' key not found")
+        if not os.path.exists(checkpoint_file):
+            raise FileNotFoundError(f"Checkpoint file not found at {checkpoint_file}")
 
-                network_weights = {k.replace('module.', ''): v for k, v in checkpoint['network_weights'].items()}
-                
-                # 가중치 로드
-                model.load_state_dict(network_weights, strict=False)
-                print("✓ Successfully loaded pre-trained nnU-Net model!")
-                
-            except Exception as e:
-                print(f"⚠️ Warning: Failed to load checkpoint ({e}). Using randomly initialized weights.")
-        else:
-            if checkpoint_file:
-                print(f"⚠️ Warning: Checkpoint file not found at {checkpoint_file}. Using randomly initialized weights.")
-            else:
-                print("⚠️ No checkpoint file specified. Using randomly initialized nnU-Net architecture.")
-        
+        print(f"Loading checkpoint from: {checkpoint_file}")
+        try:
+            checkpoint = torch.load(checkpoint_file, map_location=torch.device('cpu'), weights_only=False)
+        except Exception as e:
+            raise RuntimeError(f"Failed to load checkpoint from {checkpoint_file}: {e}") from e
+
+        # Checkpoint 유효성 검증
+        if 'network_weights' not in checkpoint:
+            raise ValueError("Invalid checkpoint: 'network_weights' key not found")
+
+        network_weights = {k.replace('module.', ''): v for k, v in checkpoint['network_weights'].items()}
+
+        # 가중치 로드
+        # segmentation head 를 쓰지 않아 strict=False 가 필요하므로, 키 어긋남은 반환값으로만 잡을 수 있다.
+        load_result = model.load_state_dict(network_weights, strict=False)
+
+        model_keys = list(model.state_dict().keys())
+        missing_keys = list(load_result.missing_keys)
+        unexpected_keys = list(load_result.unexpected_keys)
+        matched_count = len(model_keys) - len(missing_keys)
+
+        if matched_count == 0:
+            raise RuntimeError(
+                f"Checkpoint {checkpoint_file} matched none of the {len(model_keys)} model parameters: "
+                f"{len(missing_keys)} missing (e.g. {missing_keys[:5]}), "
+                f"{len(unexpected_keys)} unexpected (e.g. {unexpected_keys[:5]})"
+            )
+
+        encoder_missing = [key for key in missing_keys if key.startswith('encoder.')]
+        if encoder_missing:
+            raise RuntimeError(
+                f"Checkpoint {checkpoint_file} left {len(encoder_missing)} encoder parameters unloaded "
+                f"(e.g. {encoder_missing[:5]}); {len(unexpected_keys)} checkpoint keys were unexpected "
+                f"(e.g. {unexpected_keys[:5]})"
+            )
+
+        print(f"✓ Successfully loaded pre-trained nnU-Net model! "
+              f"(matched {matched_count}/{len(model_keys)} parameters, {len(unexpected_keys)} unexpected keys)")
+
         # Encoder 추출
         encoder = nnUNetEncoder(model)
         

@@ -1,6 +1,7 @@
 import os
 import sys
 import glob
+import math
 import re
 import json
 import pandas as pd
@@ -20,33 +21,45 @@ from utils.data_splitter import DataSplitter
 
 
 def load_intensity_properties_from_plans(plans_file_path):
-    """nnUNet plans 파일에서 intensity properties를 로드하는 함수"""
+    """nnUNet plans 파일에서 intensity properties를 로드하는 함수.
+
+    파일이 없거나 값이 하나라도 빠져 있으면 예외로 멈춘다.
+    기본값으로 대신하면 사전학습 때와 다른 정규화로 조용히 학습되어 결과를 신뢰할 수 없다.
+    """
     if not os.path.exists(plans_file_path):
-        print(f"⚠️ Warning: Plans file not found at {plans_file_path}")
-        return None
-    
+        raise FileNotFoundError(f"Plans file not found at {plans_file_path}")
+
     try:
         with open(plans_file_path, 'r') as f:
             plans_data = json.load(f)
-        
-        # foreground_intensity_properties_per_channel에서 첫 번째 채널 정보 추출
-        intensity_props = plans_data.get('foreground_intensity_properties_per_channel', {})
-        
-        if '0' in intensity_props:
-            channel_0_props = intensity_props['0']
-            return {
-                'mean_intensity': float(channel_0_props.get('mean', 340.6403503417969)),
-                'std_intensity': float(channel_0_props.get('std', 239.483154296875)),
-                'lower_bound': float(channel_0_props.get('percentile_00_5', 130.0)),
-                'upper_bound': float(channel_0_props.get('percentile_99_5', 1272.0))
-            }
-        else:
-            print(f"⚠️ Warning: Channel '0' not found in intensity properties")
-            return None
-            
     except Exception as e:
-        print(f"⚠️ Warning: Failed to load intensity properties from {plans_file_path}: {e}")
-        return None
+        raise RuntimeError(f"Failed to load intensity properties from {plans_file_path}: {e}") from e
+
+    # foreground_intensity_properties_per_channel에서 첫 번째 채널 정보 추출
+    intensity_props = plans_data.get('foreground_intensity_properties_per_channel', {})
+
+    if '0' not in intensity_props:
+        raise ValueError(f"Channel '0' not found in intensity properties of {plans_file_path}")
+
+    channel_0_props = intensity_props['0']
+    required_keys = ['mean', 'std', 'percentile_00_5', 'percentile_99_5']
+    missing_keys = [key for key in required_keys if key not in channel_0_props]
+    if missing_keys:
+        raise ValueError(f"Channel '0' of {plans_file_path} is missing intensity keys: {missing_keys}")
+
+    # bool 은 float() 을 통과해 1.0 / 0.0 이 되고, json 은 NaN·Infinity 를 기본으로 파싱한다.
+    invalid = [key for key in required_keys
+               if isinstance(channel_0_props[key], bool) or not isinstance(channel_0_props[key], (int, float))
+               or not math.isfinite(channel_0_props[key])]
+    if invalid:
+        raise ValueError(f"Channel '0' of {plans_file_path} has non-numeric intensity values: {invalid}")
+
+    return {
+        'mean_intensity': float(channel_0_props['mean']),
+        'std_intensity': float(channel_0_props['std']),
+        'lower_bound': float(channel_0_props['percentile_00_5']),
+        'upper_bound': float(channel_0_props['percentile_99_5'])
+    }
 
 
 class CTNormalization:
@@ -285,28 +298,21 @@ def build_transforms(img_size):
 
     평가용은 정규화와 리사이즈뿐이라 같은 케이스를 몇 번 읽어도 같은 텐서가 나온다.
     """
-    # nnUNet plans 파일에서 intensity properties 로드 시도
-    intensity_props = None
-    if hasattr(Config, 'DL_NNUNET_CONFIG') and Config.DL_NNUNET_CONFIG:
-        plans_file_norm = Config.DL_NNUNET_CONFIG.get('plans_file_norm')
-        if plans_file_norm:
-            intensity_props = load_intensity_properties_from_plans(plans_file_norm)
-    
-    # Fallback으로 기본값 사용
-    if intensity_props is None:
-        print("⚠️ Using default intensity normalization values")
-        intensity_props = {
-            'mean_intensity': 363.5522766113281,
-            'std_intensity': 249.69992065429688,
-            'lower_bound': 130.0,
-            'upper_bound': 1298.0
-        }
-    else:
-        print(f"✓ Loaded intensity properties from nnUNet plans file:")
-        print(f"  Mean: {intensity_props['mean_intensity']:.2f}")
-        print(f"  Std: {intensity_props['std_intensity']:.2f}")
-        print(f"  Lower bound: {intensity_props['lower_bound']:.2f}")
-        print(f"  Upper bound: {intensity_props['upper_bound']:.2f}\n")
+    # nnUNet plans 파일에서 intensity properties 로드
+    if not (hasattr(Config, 'DL_NNUNET_CONFIG') and Config.DL_NNUNET_CONFIG):
+        raise ValueError("Config.DL_NNUNET_CONFIG is required to build the CT normalization transform")
+
+    plans_file_norm = Config.DL_NNUNET_CONFIG.get('plans_file_norm')
+    if not plans_file_norm:
+        raise ValueError("Config.DL_NNUNET_CONFIG must provide 'plans_file_norm' to build the CT normalization transform")
+
+    intensity_props = load_intensity_properties_from_plans(plans_file_norm)
+
+    print(f"✓ Loaded intensity properties from nnUNet plans file:")
+    print(f"  Mean: {intensity_props['mean_intensity']:.2f}")
+    print(f"  Std: {intensity_props['std_intensity']:.2f}")
+    print(f"  Lower bound: {intensity_props['lower_bound']:.2f}")
+    print(f"  Upper bound: {intensity_props['upper_bound']:.2f}\n")
     ct_normalization = CTNormalization(**intensity_props)
     
     # img_size가 튜플이 아닌 경우 튜플로 변환
