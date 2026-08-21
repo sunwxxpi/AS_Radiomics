@@ -10,17 +10,29 @@ nnU-Net 으로 대동맥 판막 석회화(AVC) 마스크를 얻고, 그 마스�
 ```bash
 python main.py    # Radiomics + ML 파이프라인. 설정은 config.py 를 직접 고친다 (CLI 인자 없음)
 
-python DL_Classification/dl_cls_train.py --model_type nnunet --img_size "(32, 384, 320)"
-python DL_Classification/dl_cls_test.py  --model_type nnunet --img_size "(32, 384, 320)" --enable_cam
+python DL_Classification/dl_cls_train.py
+python DL_Classification/dl_cls_test.py --enable_cam
 
 tensorboard --logdir DL_Classification/logs/{writer_comment}
 ```
 
-`{writer_comment}` 는 `--writer_comment` 값이고, 생략하면 `{model_type}_{D}_{H}_{W}` 가 된다 (`main.py` 쪽에서는 `Config.DL_COMMENT_WRITER` 가 같은 값을 가리킨다).
+`{writer_comment}` 는 `config.py` 의 `Config.DL_COMMENT_WRITER` 하나가 정한다 — `{model_type}_{D}_{H}_{W}_{BASE_DIR 폴더 이름}` 이다.
+`--model_type` · `--img_size` · `--model_path` 는 `config.py` 의 `DL_MODEL_TYPE` · `DL_IMG_SIZE` · `DL_WEIGHTS_ROOT` 를 그대로 받는다.
+다른 값을 주면 경로가 어긋나므로 시작 전에 멈춘다. 모델과 입력 크기는 `config.py` 에서 바꾸고, `main.py` 도 이 이름으로 DL 산출물을 찾는다.
 
 `dl_cls_train.py` 는 5-fold 를 돌린 뒤 development 전체로 refit 까지 이어서 한다 — GPU 학습 6회다.
 `--stage folds` / `--stage refit` 로 끊어 돌릴 수 있고, `refit` 은 5-fold 가 남긴 `weights/{writer_comment}/fold_best_epochs.csv` 를 읽어 종료 epoch 을 정한다.
 refit 종료 epoch 은 fold 별 best epoch 다섯 값의 중앙값이고, 같은 값이 cosine 스케줄의 끝점으로도 들어간다.
+
+`--resume` 은 `fold_best_epochs.csv` 에 기록이 있고 그 fold 의 `best_model.pth` 도 있는 fold 만 건너뛴다.
+둘 중 하나라도 없으면 그 fold 는 처음부터 다시 돈다. fold 를 돌지 않는 `--stage refit` 과 같이 주면 시작 전에 멈춘다.
+fold 가중치가 남아 있거나 `--resume` 이면 이미 있는 `cls_fold_assignment.csv` 와 지금 계산한 배정이 같은지도 본다.
+데이터가 한 건만 늘거나 줄어도 배정이 통째로 바뀌므로 덮어쓰기 전에 멈춘다. 새로 돌릴 때는 그 가중치 디렉토리를 먼저 지운다.
+`--resume` 은 `fold_best_epochs.csv` 는 있는데 배정 파일이 없으면 아예 시작하지 않는다.
+`fold_best_epochs.csv` 에는 그때 쓴 학습 인자가 `arg_*` 컬럼으로 함께 적힌다.
+빠지는 것은 경로를 정하는 `--model_path` 와 단계마다 달라지는 `--stage` · `--resume` · `--enable_cam` · `--save_model` 뿐이다.
+하나라도 지금 값과 다르면 `--resume` 도 `--stage refit` 도 그 기록을 읽지 않고 멈추므로, 이어 돌릴 때는 fold 를 돌릴 때 쓴 인자를 그대로 다시 넘긴다.
+`--stage refit` 은 fold 다섯 줄이 다 있어야 읽는다.
 
 `dl_cls_test.py` 도 같은 `--stage` 를 받는다. test 추론은 refit 모델 하나로 하고, fold 5개 평가는 DL 팔 내부 점검용이다.
 융합 갈래가 읽는 DL 확률은 refit 것(`results/{writer_comment}/probs/refit.csv`) 하나다.
@@ -131,7 +143,7 @@ DL 학습/평가는 `DL_Classification/dl_cls_config.py` 의 argparse 를 쓰지
 | `USE_GATED_FUSION` / `USE_ENSEMBLE` | `False` / `False` | 융합 방식 선택 |
 | `DL_MODEL_TYPE` | `'nnunet'` | `'nnunet'` \| `'custom'`(MONAI ResNet50) |
 | `DL_IMG_SIZE` | `(32, 384, 320)` | (D, H, W). nnUNet 사전학습 patch size. custom 은 `(56, 448, 448)` |
-| `DL_COMMENT_WRITER` | `f'{type}_{D}_{H}_{W}'` | 가중치·결과 디렉토리 이름. 데이터셋이 바뀌어도 그대로이므로 직접 바꾼다 |
+| `DL_COMMENT_WRITER` | `f'{type}_{D}_{H}_{W}_{DL_DATASET_TAG}'` | 가중치·결과 디렉토리 이름. `DL_DATASET_TAG` 가 `BASE_DIR` 의 폴더 이름이라 데이터셋을 바꾸면 이름도 같이 바뀐다 |
 | `RESAMPLED_SPACING` | `[0.3828125, 0.3828125, 3.0]` | radiomics 추출 전 목표 spacing `[x, y, z]` mm. `None` 이면 원본 |
 | `ENABLE_DILATION` / `DILATION_ITERATIONS` | `False` / `1` | 마스크 팽창. 켜면 결과 디렉토리 이름에 `_dil{N}` 이 붙는다 |
 | `FEATURE_SELECTION_METHOD` | `'lasso'` | `'lasso'`/`'rfe'`/`'univariate'`/`'mutual_info'`/`'random_forest'`/`'none'` |
@@ -141,7 +153,7 @@ DL 학습/평가는 `DL_Classification/dl_cls_config.py` 의 argparse 를 쓰지
 방법별·모델별 세부 파라미터(`RFE_*`, `LASSO_*`, `SVM_*` 등)는 `config.py` 에 그대로 있다.
 
 nnUNet 사전학습 자산은 `DL_NNUNET_CONFIG` 로 묶여 있다 — 아키텍처 plans(COCA), 정규화 통계 plans(AVC), 체크포인트.
-**`DL_Classification/nnUNet/COCA_checkpoint_final.pth` 가 없으면 random init 으로 폴백**하므로 학습 전 존재를 확인한다.
+**`DL_NNUNET_CONFIG` 의 파일이 하나라도 없으면 `dl_cls_train.py` 가 학습 시작 전에 멈춘다** — 체크포인트가 없어도 random init 으로 폴백하지 않는다.
 
 ## 결과
 

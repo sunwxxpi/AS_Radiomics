@@ -9,13 +9,15 @@ import torch.nn as nn
 import dl_cls_dataset
 from tqdm import tqdm
 from sklearn.model_selection import StratifiedKFold
-from torch.utils.data import DataLoader, SubsetRandomSampler
+from torch.utils.data import DataLoader, Subset, SubsetRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 from monai.data import worker_init_fn
 from monai.utils import set_determinism
 from dl_cls_config import load_config
 from dl_cls_model import create_model
 from dl_cls_valid import validate
+# dl_cls_dataset 이 부모 디렉토리를 sys.path 에 넣은 뒤라야 찾을 수 있다.
+from config import Config
 
 
 def seed_torch(seed=1):
@@ -50,12 +52,42 @@ def save_results(model_save_path, filename, epoch, loss, val_acc, f1score, auc, 
         f.write('Loss: %f, Acc: %f, F1 Score: %f, AUC: %f, Spe: %f, Sen: %f, Pre: %f' % (loss, val_acc, f1score, auc, spe, sen, pre))
 
 
-def save_fold_assignment(dataset, splits, save_path):
+def check_fold_assignment_match(recorded, assignment, csv_path):
+    """지금 계산한 fold 배정이 기록해 둔 배정과 같은지 본다.
+
+    데이터 파일이 하나만 늘거나 줄어도 배정이 통째로 바뀌어, 재사용한 옛 가중치는 자기가 학습에 쓴 케이스를 검증으로 받는다.
+    그러면 OOF embedding 이 조용히 샌다.
+    """
+    absent = sorted({'patient_id', 'fold'} - set(recorded.columns))
+    if absent:
+        raise ValueError(f"{csv_path}: fold 배정 기록에 {absent} 컬럼이 없다 — 5-fold 를 다시 돌린다")
+
+    recorded_fold = {str(row.patient_id): int(row.fold) for row in recorded.itertuples()}
+    current_fold = {str(row.patient_id): int(row.fold) for row in assignment.itertuples()}
+
+    added = sorted(set(current_fold) - set(recorded_fold))
+    removed = sorted(set(recorded_fold) - set(current_fold))
+    moved = sorted(pid for pid in set(recorded_fold) & set(current_fold) if recorded_fold[pid] != current_fold[pid])
+    if not (added or removed or moved):
+        return
+
+    def brief(patient_ids):
+        return f"{len(patient_ids)}건 {patient_ids[:10]}"
+
+    raise ValueError(
+        f"{csv_path}: 지금 계산한 fold 배정이 기록과 다르다 "
+        f"(새로 생긴 케이스 {brief(added)}, 없어진 케이스 {brief(removed)}, fold 가 바뀐 케이스 {brief(moved)}) — "
+        f"이미 있는 가중치는 이 배정으로 학습된 것이 아니다 — 새로 돌릴 거면 그 가중치 디렉토리를 지운다"
+    )
+
+
+def save_fold_assignment(dataset, splits, save_path, require_match=False):
     """5-fold 배정을 `patient_id` 단위로 CSV 에 남긴다.
 
     `fold` 는 그 케이스가 검증으로 들어간 fold 번호이고, fold k 의 학습셋은 `fold != k` 인 행 전부다.
     배정이 정렬 없는 `glob` 순서에 걸려 있어 이 파일 말고는 radiomics 쪽에서 같은 분할을 재현할 길이 없다.
     파일명이 규약과 어긋나거나 배정이 케이스마다 한 번씩 걸리지 않으면 GPU 시간을 쓰기 전에 멈춘다.
+    `require_match` 면 이미 있는 배정과 달라도 덮어쓰기 전에 멈춘다 — 남아 있는 가중치가 어느 분할로 학습된 것인지 알 수 없게 된다.
     """
     fold_of = np.zeros(len(dataset.image_files), dtype=np.int64)
     for fold, (_, val_idx) in enumerate(splits, start=1):
@@ -91,18 +123,88 @@ def save_fold_assignment(dataset, splits, save_path):
 
     os.makedirs(save_path, exist_ok=True)
     csv_path = os.path.join(save_path, 'cls_fold_assignment.csv')
+    if require_match and os.path.exists(csv_path):
+        try:
+            recorded = pd.read_csv(csv_path, dtype={'patient_id': str})
+        except Exception as e:
+            raise ValueError(f"{csv_path}: fold 배정 기록을 읽을 수 없다 ({e}) — 5-fold 를 다시 돌린다") from e
+        check_fold_assignment_match(recorded, assignment, csv_path)
     assignment.to_csv(csv_path, index=False)
     counts = assignment['fold'].value_counts().sort_index().to_dict()
     print(f"✓ fold 배정 저장: {csv_path} (fold 별 검증 건수 {counts})")
     return assignment
 
 
-def save_fold_best_epochs(fold_best, save_path):
-    """fold 별 best epoch 과 그때의 val loss 를 CSV 로 남긴다.
+# 인자 이름이 frame 의 `fold` 컬럼과 겹쳐 접두사를 붙인다.
+ARG_COLUMN_PREFIX = 'arg_'
+
+# 단계마다 정당하게 달라지는 인자와 load_config 가 이미 Config 와 맞춰 둔 경로 인자. 나머지 학습 인자는 전부 기록하고 견준다.
+UNCOMPARED_ARG_KEYS = ('stage', 'resume', 'enable_cam', 'save_model', 'model_path', 'writer_comment')
+
+
+def compared_arg_keys(config):
+    """기록하고 견줄 학습 인자 이름"""
+    return sorted(key for key in vars(config) if key not in UNCOMPARED_ARG_KEYS)
+
+
+def check_training_args(frame, config, csv_path):
+    """기록의 학습 인자가 지금 인자와 같은지 본다.
+
+    writer_comment 가 model_type·img_size·데이터셋만 담아 나머지 인자를 바꿔도 같은 디렉토리를 가리키므로,
+    이 검사가 없으면 다른 인자로 뽑은 best epoch 이 그대로 refit 종료 epoch 이 된다.
+    """
+    keys = compared_arg_keys(config)
+    recorded_columns = {column for column in frame.columns if column.startswith(ARG_COLUMN_PREFIX)}
+    expected_columns = {ARG_COLUMN_PREFIX + key for key in keys}
+    absent = sorted(expected_columns - recorded_columns)
+    unknown = sorted(recorded_columns - expected_columns)
+    if absent or unknown:
+        raise ValueError(
+            f"{csv_path}: 기록된 학습 인자 목록이 지금과 다르다 (없는 컬럼 {absent}, 모르는 컬럼 {unknown}) — 5-fold 를 다시 돌린다"
+        )
+
+    # CSV 왕복에서 타입이 바뀌므로 문자열로 견준다.
+    mismatched = []
+    for key in keys:
+        recorded = sorted({str(value) for value in frame[ARG_COLUMN_PREFIX + key].tolist()})
+        current = str(getattr(config, key))
+        if recorded != [current]:
+            mismatched.append(f"{key}: 기록 {recorded} vs 지금 {current}")
+
+    if mismatched:
+        raise ValueError(
+            f"{csv_path}: 기록된 학습 인자가 지금 인자와 다르다 ({'; '.join(mismatched)}) — "
+            f"같은 인자로 다시 부르거나, 인자를 바꿀 생각이면 5-fold 를 다시 돌린다"
+        )
+
+
+def fold_weight_path(config, fold):
+    """fold 별 best 가중치 경로"""
+    return os.path.join(config.model_path, config.writer_comment, str(fold), 'best_model.pth')
+
+
+def merge_recorded_folds(fold_best, recorded_folds, config):
+    """이번 실행에서 아직 안 돈 fold 는 가중치가 남아 있을 때만 기록을 이어 붙인다.
+
+    저장이 `fold_best` 만 쓰면 뒤쪽 fold 의 기록이 지워져, 가중치가 멀쩡한데도 다시 학습하게 된다.
+    가중치 없는 fold 의 기록까지 남기면 반대로 CSV 만 다 돈 것처럼 보여 `--stage refit` 이 없는 모델 위에서 그냥 돈다.
+    """
+    processed = {row['fold'] for row in fold_best}
+    pending = [{'fold': fold, 'best_epoch': int(row['best_epoch']), 'best_val_loss': float(row['best_val_loss'])}
+               for fold, row in sorted(recorded_folds.items())
+               if fold not in processed and os.path.exists(fold_weight_path(config, fold))]
+    return fold_best + pending
+
+
+def save_fold_best_epochs(fold_best, save_path, config):
+    """fold 별 best epoch 과 그때의 val loss 를 학습 인자와 함께 CSV 로 남긴다.
 
     refit 종료 epoch 이 이 값들의 중앙값이라 `--stage refit` 로 따로 돌릴 때는 이 파일이 유일한 근거다.
+    fold 하나가 끝날 때마다 다시 써서 중간에 죽어도 앞선 fold 의 기록이 남는다.
     """
     frame = pd.DataFrame(fold_best).sort_values('fold', ignore_index=True)
+    for key in compared_arg_keys(config):
+        frame[ARG_COLUMN_PREFIX + key] = str(getattr(config, key))
 
     os.makedirs(save_path, exist_ok=True)
     csv_path = os.path.join(save_path, 'fold_best_epochs.csv')
@@ -111,13 +213,31 @@ def save_fold_best_epochs(fold_best, save_path):
     return frame
 
 
-def load_fold_best_epochs(save_path):
-    """기록해 둔 fold 별 best epoch 을 읽는다."""
+def load_fold_best_epochs(save_path, config, require_all_folds=True):
+    """기록해 둔 fold 별 best epoch 을 읽는다.
+
+    기록의 학습 인자가 지금 인자와 다르면 읽지 않고 멈춘다.
+    `require_all_folds` 면 fold 1..config.fold 가 한 번씩 다 들어 있어야 한다.
+    fold 하나가 끝날 때마다 저장하므로 중간에 죽어 일부만 적힌 파일도 그대로 남고, 그 중앙값은 5-fold 를 다 돌린 종료 epoch 과 다르다.
+    """
     csv_path = os.path.join(save_path, 'fold_best_epochs.csv')
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"fold best epoch 기록이 없다: {csv_path} — 5-fold 를 먼저 돌린다")
 
-    return pd.read_csv(csv_path)['best_epoch'].tolist()
+    frame = pd.read_csv(csv_path)
+    check_training_args(frame, config, csv_path)
+
+    if require_all_folds:
+        expected = list(range(1, config.fold + 1))
+        recorded = sorted(int(value) for value in frame['fold'].tolist())
+        if recorded != expected:
+            missing = sorted(set(expected) - set(recorded))
+            raise ValueError(
+                f"{csv_path}: fold 기록이 {expected} 와 다르다 (있는 fold {recorded}, 빠진 fold {missing}) — "
+                f"5-fold 를 마저 돌린다"
+            )
+
+    return frame
 
 
 def refit_end_epoch(best_epochs):
@@ -524,8 +644,19 @@ if __name__ == '__main__':
     seed_torch(42)
     args = load_config()
 
+    # checkpoint 가 없으면 random init 으로 폴백해 성능이 폭락하고, 정규화 상수 파일이 없으면 다른 상수로 조용히 학습된다.
+    if args.model_type == 'nnunet':
+        required_files = ['plans_file_arch', 'dataset_json_file', 'checkpoint_file', 'plans_file_norm']
+        absent = [f"{key}={Config.DL_NNUNET_CONFIG.get(key)}" for key in required_files
+                  if not (Config.DL_NNUNET_CONFIG.get(key) and os.path.exists(Config.DL_NNUNET_CONFIG[key]))]
+        if absent:
+            raise FileNotFoundError(
+                f"nnUNet 설정 파일이 없다: {', '.join(absent)} — "
+                f"경로가 전부 상대경로라 저장소 루트에서 실행해야 한다"
+            )
+
     cv = StratifiedKFold(n_splits=args.fold, random_state=42, shuffle=True)
-    
+
     # AS Train 데이터셋 로드 (분할 설정 적용)
     print("AS Train 데이터셋 로딩...")
     train_set, label_to_idx, _, unique_labels = dl_cls_dataset.get_as_dataset(
@@ -554,35 +685,64 @@ if __name__ == '__main__':
 
     if not os.path.exists(args_path):
         os.makedirs(args_path)
-    with open(os.path.join(args_path, 'model_info.txt'), 'w') as f:
+    with open(os.path.join(args_path, f'model_info_{args.stage}.txt'), 'w') as f:
         f.write(str(vars(args)))
 
     print("START TRAINING")
     fold_best = []
 
     if args.stage in ('all', 'folds'):
+        recorded_folds = {}
+        if args.resume and os.path.exists(os.path.join(args_path, 'fold_best_epochs.csv')):
+            # 중간에 죽은 뒤 이어 돌리는 자리라 일부 fold 만 적힌 기록도 받는다.
+            recorded = load_fold_best_epochs(args_path, args, require_all_folds=False)
+            recorded_folds = {int(row['fold']): row for _, row in recorded.iterrows()}
+            assignment_path = os.path.join(args_path, 'cls_fold_assignment.csv')
+            if not os.path.exists(assignment_path):
+                raise FileNotFoundError(
+                    f"fold 배정 기록이 없다: {assignment_path} — "
+                    f"재사용할 가중치가 어느 분할로 학습된 것인지 확인할 수 없으니 --resume 없이 다시 돌린다"
+                )
+
         train_labels = [train_set[i]['labels'] for i in range(len(train_set))]
         splits = list(cv.split(train_set, train_labels))
-        save_fold_assignment(train_set, splits, args_path)
+        # 옛 가중치가 남은 채 배정만 새로 쓰이면 그 fold 모델이 자기가 학습에 쓴 케이스를 검증으로 배정받는다.
+        kept_weights = any(os.path.exists(fold_weight_path(args, fold)) for fold in range(1, args.fold + 1))
+        save_fold_assignment(train_set, splits, args_path, require_match=args.resume or kept_weights)
 
         for fold, (train_idx, val_idx) in enumerate(splits, start=1):
+            # fold 마다 같은 자리에서 시작한다. 전역 RNG 를 이어받으면 앞 fold 가 난수를 몇 번 뽑았는지에 초기 가중치가 걸린다.
+            seed_torch(42 + fold)
             print(f"\nCross Validation Fold {fold}")
 
+            record = recorded_folds.get(fold)
+            weight_file = fold_weight_path(args, fold)
+            if record is not None and os.path.exists(weight_file):
+                print(f"fold {fold} 은 기록과 가중치가 다 있어 건너뛴다 (best epoch {int(record['best_epoch'])}, val loss {float(record['best_val_loss']):.4f})")
+                fold_best.append({'fold': fold, 'best_epoch': int(record['best_epoch']),
+                                  'best_val_loss': float(record['best_val_loss'])})
+                continue
+
             train_sampler = SubsetRandomSampler(train_idx)
-            val_sampler = SubsetRandomSampler(val_idx)
             train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=False, sampler=train_sampler,
                                       num_workers=6, worker_init_fn=worker_init_fn)
-            val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, sampler=val_sampler)
+            # 검증은 순서를 고정한다. sampler 를 물리면 epoch 마다 배치 구성이 바뀐다.
+            val_loader = DataLoader(Subset(val_set, val_idx), batch_size=args.batch_size, shuffle=False)
 
             best_epoch, best_val_loss = train(args, train_loader, val_loader, fold)
             fold_best.append({'fold': fold, 'best_epoch': best_epoch, 'best_val_loss': best_val_loss})
+            save_fold_best_epochs(merge_recorded_folds(fold_best, recorded_folds, args), args_path, args)
 
-        save_fold_best_epochs(fold_best, args_path)
+        save_fold_best_epochs(merge_recorded_folds(fold_best, recorded_folds, args), args_path, args)
 
     if args.stage in ('all', 'refit'):
-        best_epochs = [row['best_epoch'] for row in fold_best] if fold_best else load_fold_best_epochs(args_path)
+        best_epochs = ([row['best_epoch'] for row in fold_best] if fold_best
+                       else load_fold_best_epochs(args_path, args)['best_epoch'].tolist())
         end_epoch = refit_end_epoch(best_epochs)
         print(f"\nSTART REFIT - development {len(train_set)}, 종료 epoch {end_epoch} (fold best epochs {best_epochs})")
+
+        # fold 가 쓰고 남긴 전역 RNG 를 이어받지 않는다. `--stage all` 의 refit 과 `--stage refit` 단독이 같은 초기 가중치에서 시작해야 한다.
+        seed_torch(42)
 
         # 증강은 fold 학습과 같게 두고 sampler 만 뗀다. 322 전체가 매 epoch 한 번씩 들어간다.
         refit_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=6,

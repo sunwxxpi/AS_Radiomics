@@ -31,7 +31,12 @@ class Config:
     DL_MODEL_TYPE = 'nnunet'            # 'nnunet' 또는 'custom'
     DL_IMG_SIZE = (32, 384, 320)        # 입력 이미지 크기 (D, H, W): nnUNet(32,384,320), Med3D(56,448,448)
     IMG_SIZE_DEPTH, IMG_SIZE_HEIGHT, IMG_SIZE_WIDTH = DL_IMG_SIZE
-    DL_COMMENT_WRITER = f'{DL_MODEL_TYPE}_{IMG_SIZE_DEPTH}_{IMG_SIZE_HEIGHT}_{IMG_SIZE_WIDTH}'
+    DL_NUM_FOLDS = 5                    # DL cross-fitting fold 수. dl_cls_train.py 의 --fold 가 다른 값이면 시작 전에 멈춘다
+    # 옛 split 으로 학습한 산출물과 가중치 경로가 겹치지 않게 데이터셋 이름을 붙인다.
+    DL_DATASET_TAG = os.path.basename(os.path.normpath(BASE_DIR))
+    DL_COMMENT_WRITER = f'{DL_MODEL_TYPE}_{IMG_SIZE_DEPTH}_{IMG_SIZE_HEIGHT}_{IMG_SIZE_WIDTH}_{DL_DATASET_TAG}'
+    # DL 학습이 가중치를 저장하는 곳과 파이프라인이 읽는 곳이 갈리지 않게 한 자리에서 정한다.
+    DL_WEIGHTS_ROOT = './DL_Classification/weights'
     
     # nnUNet 관련 설정 (DL_MODEL_TYPE이 'nnunet'인 경우)
     DL_NNUNET_CONFIG = {
@@ -59,13 +64,13 @@ class Config:
     
     @classmethod
     def get_dl_model_paths(cls):
-        """5-fold 가중치 경로를 `{fold 번호: 경로}` 로 만든다.
+        """fold 별 가중치 경로를 `{fold 번호: 경로}` 로 만든다.
 
-        development 행의 OOF embedding 은 케이스마다 자기를 검증으로 뺀 fold 를 골라 쓰므로 다섯 개가 다 있어야 한다.
+        development 행의 OOF embedding 은 케이스마다 자기를 검증으로 뺀 fold 를 골라 쓰므로 `DL_NUM_FOLDS` 개가 다 있어야 한다.
         """
         return {
-            fold: f'./DL_Classification/weights/{cls.DL_COMMENT_WRITER}/{fold}/best_model.pth'
-            for fold in range(1, 6)
+            fold: f'{cls.DL_WEIGHTS_ROOT}/{cls.DL_COMMENT_WRITER}/{fold}/best_model.pth'
+            for fold in range(1, cls.DL_NUM_FOLDS + 1)
         }
 
     @classmethod
@@ -74,7 +79,7 @@ class Config:
 
         test 추론과 test 행 embedding 은 이 하나만 쓴다. development 행은 그 케이스를 학습에 안 쓴 fold 모델로 뽑는다.
         """
-        return f'./DL_Classification/weights/{cls.DL_COMMENT_WRITER}/refit/refit_model.pth'
+        return f'{cls.DL_WEIGHTS_ROOT}/{cls.DL_COMMENT_WRITER}/refit/refit_model.pth'
 
     @classmethod
     def get_dl_fold_assignment_path(cls):
@@ -82,7 +87,7 @@ class Config:
 
         OOF embedding 은 이 배정으로 케이스마다 모델을 고르므로, DL 학습이 남긴 파일과 짝이 맞지 않으면 조용히 다른 분할이 된다.
         """
-        return f'./DL_Classification/weights/{cls.DL_COMMENT_WRITER}/cls_fold_assignment.csv'
+        return f'{cls.DL_WEIGHTS_ROOT}/{cls.DL_COMMENT_WRITER}/cls_fold_assignment.csv'
 
     # 모델 하이퍼파라미터
     RANDOM_STATE = 42
