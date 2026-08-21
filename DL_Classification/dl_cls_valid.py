@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import torch.nn as nn
 from sklearn.metrics import roc_auc_score
 from tqdm import tqdm
 
@@ -48,8 +49,17 @@ def validate(config, model, val_loader, criterion):
 
     print("START VALIDATION")
 
+    # 넘겨받은 criterion 의 reduction='mean' 은 배치 타깃의 가중치 합으로 나눠, 어느 케이스끼리 한 배치에 묶이느냐가 값을 지배한다.
+    # 여기서는 합만 모으고 전체 가중치로 한 번 나눠 배치 구성·순서와 무관한 값을 만든다.
+    sum_criterion = nn.CrossEntropyLoss(
+        weight=criterion.weight,
+        ignore_index=criterion.ignore_index,
+        label_smoothing=criterion.label_smoothing,
+        reduction='sum',
+    )
+
     epoch_loss = 0
-    n_samples = 0
+    weight_total = 0
     y_true, y_score = [], []
 
     cm = torch.zeros((config.num_classes, config.num_classes))
@@ -62,9 +72,11 @@ def validate(config, model, val_loader, criterion):
 
                 output = model(images=images)
 
-                loss = criterion(output, labels)
-                epoch_loss += loss.item() * images.size(0)  # accumulate loss over batch
-                n_samples += images.size(0)
+                epoch_loss += sum_criterion(output, labels).item()
+                if criterion.weight is None:
+                    weight_total += labels.numel()
+                else:
+                    weight_total += criterion.weight[labels].sum().item()
 
                 pred = output.argmax(dim=1)
                 y_true.extend(labels.cpu().numpy())
@@ -75,8 +87,8 @@ def validate(config, model, val_loader, criterion):
                 # Update progress bar
                 pbar.update(1)
 
-    # sampler 로 자른 뒤의 건수로 나눈다. len(dataset) 은 fold 로 나누기 전의 development 전체다.
-    avg_epoch_loss = epoch_loss / n_samples
+    # 분모는 검증에 실제로 들어간 타깃의 가중치 합이다. weight 가 없으면 건수와 같다.
+    avg_epoch_loss = epoch_loss / weight_total
     print(f'Validation - Avg Loss: {avg_epoch_loss:.4f}')
 
     # Calculate metrics
