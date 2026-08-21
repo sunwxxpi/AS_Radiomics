@@ -138,6 +138,7 @@ radiomics_analysis_results/{dataset_type}/{feature_method}/{mode}/{run_name}/[fo
 └── {model}_confusion_matrix.png, {model}_multiclass_{ROC,PR}_curve.png
 
 DL_Classification/
+├── weights/{writer_comment}/cls_fold_assignment.csv # development 322 의 patient_id → fold
 ├── weights/{writer_comment}/{1..5}/best_model.pth   # 융합 갈래 세 개의 선행 조건
 ├── logs/{writer_comment}/{1..5}/                    # TensorBoard
 └── results/{writer_comment}/probs/fold_{N}.csv      # ensemble 의 선행 조건

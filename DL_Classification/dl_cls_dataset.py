@@ -152,7 +152,8 @@ def prepare_as_data(data_split_mode='fix', data_split_random_state=42, test_size
     
     # TR 디렉토리에서 데이터 수집
     if os.path.exists(Config.IMAGE_TR_DIR):
-        nii_files = glob(os.path.join(Config.IMAGE_TR_DIR, "*.nii.gz"))
+        # 정렬을 빼면 파일 순서가 readdir 순서라 DL 5-fold 배정이 실행마다 달라질 수 있다.
+        nii_files = sorted(glob(os.path.join(Config.IMAGE_TR_DIR, "*.nii.gz")))
         for file_path in nii_files:
             filename = os.path.basename(file_path)
             match = re.match(r'([A-Za-z0-9\.\-]+)_(\d{4,})_0000\.nii\.gz', filename)
@@ -164,7 +165,7 @@ def prepare_as_data(data_split_mode='fix', data_split_random_state=42, test_size
     
     # VAL 디렉토리에서 데이터 수집
     if os.path.exists(Config.IMAGE_VAL_DIR):
-        nii_files = glob(os.path.join(Config.IMAGE_VAL_DIR, "*.nii.gz"))
+        nii_files = sorted(glob(os.path.join(Config.IMAGE_VAL_DIR, "*.nii.gz")))
         for file_path in nii_files:
             filename = os.path.basename(file_path)
             match = re.match(r'([A-Za-z0-9\.\-]+)_(\d{4,})_0000\.nii\.gz', filename)
@@ -207,7 +208,7 @@ def prepare_as_data(data_split_mode='fix', data_split_random_state=42, test_size
         
         # TR 디렉토리에서 데이터 수집 (train)
         if os.path.exists(Config.IMAGE_TR_DIR):
-            nii_files = glob(os.path.join(Config.IMAGE_TR_DIR, "*.nii.gz"))
+            nii_files = sorted(glob(os.path.join(Config.IMAGE_TR_DIR, "*.nii.gz")))
             for file_path in nii_files:
                 filename = os.path.basename(file_path)
                 match = re.match(r'([A-Za-z0-9\.\-]+)_(\d{4,})_0000\.nii\.gz', filename)
@@ -219,7 +220,7 @@ def prepare_as_data(data_split_mode='fix', data_split_random_state=42, test_size
         
         # VAL 디렉토리에서 데이터 수집 (test)
         if os.path.exists(Config.IMAGE_VAL_DIR):
-            nii_files = glob(os.path.join(Config.IMAGE_VAL_DIR, "*.nii.gz"))
+            nii_files = sorted(glob(os.path.join(Config.IMAGE_VAL_DIR, "*.nii.gz")))
             for file_path in nii_files:
                 filename = os.path.basename(file_path)
                 match = re.match(r'([A-Za-z0-9\.\-]+)_(\d{4,})_0000\.nii\.gz', filename)

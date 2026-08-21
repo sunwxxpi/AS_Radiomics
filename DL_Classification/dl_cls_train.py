@@ -1,7 +1,9 @@
 import os
 import random
 import math
+import re
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 import dl_cls_dataset
@@ -42,6 +44,53 @@ def save_results(model_save_path, filename, epoch, loss, val_acc, f1score, auc, 
     with open(os.path.join(model_save_path, filename), mode) as f:
         f.write(f'Result: (Epoch {epoch})\n')
         f.write('Loss: %f, Acc: %f, F1 Score: %f, AUC: %f, Spe: %f, Sen: %f, Pre: %f' % (loss, val_acc, f1score, auc, spe, sen, pre))
+
+
+def save_fold_assignment(dataset, splits, save_path):
+    """5-fold 배정을 `patient_id` 단위로 CSV 에 남긴다.
+
+    `fold` 는 그 케이스가 검증으로 들어간 fold 번호이고, fold k 의 학습셋은 `fold != k` 인 행 전부다.
+    배정이 정렬 없는 `glob` 순서에 걸려 있어 이 파일 말고는 radiomics 쪽에서 같은 분할을 재현할 길이 없다.
+    파일명이 규약과 어긋나거나 배정이 케이스마다 한 번씩 걸리지 않으면 GPU 시간을 쓰기 전에 멈춘다.
+    """
+    fold_of = np.zeros(len(dataset.image_files), dtype=np.int64)
+    for fold, (_, val_idx) in enumerate(splits, start=1):
+        overlapped = np.count_nonzero(fold_of[val_idx])
+        if overlapped:
+            raise ValueError(f"fold {fold}: 다른 fold 의 검증에 이미 들어간 케이스가 {overlapped}건 있다")
+        fold_of[val_idx] = fold
+
+    unassigned = np.count_nonzero(fold_of == 0)
+    if unassigned:
+        raise ValueError(f"어느 fold 의 검증에도 안 들어간 케이스가 {unassigned}건 있다")
+
+    rows = []
+    for index, image_path in enumerate(dataset.image_files):
+        image_file = os.path.basename(image_path)
+        match = re.match(r'([A-Za-z0-9\.\-]+)_(\d{4,})_0000\.nii\.gz', image_file)
+        if not match:
+            raise ValueError(f"파일명 규약 불일치: {image_file}")
+        patient_id = match.group(1).strip()
+        rows.append({
+            'patient_id': patient_id,
+            'case_id': f"{patient_id}_{match.group(2).strip()}",
+            'severity': dataset.labels[index],
+            'label_idx': int(dataset.encoded_labels[index]),
+            'fold': int(fold_of[index]),
+            'dataset_index': index,
+        })
+
+    assignment = pd.DataFrame(rows).sort_values('patient_id', ignore_index=True)
+    duplicated = sorted(set(assignment.loc[assignment['patient_id'].duplicated(), 'patient_id']))
+    if duplicated:
+        raise ValueError(f"patient_id 가 겹쳐 조인 키로 못 쓴다: {duplicated}")
+
+    os.makedirs(save_path, exist_ok=True)
+    csv_path = os.path.join(save_path, 'cls_fold_assignment.csv')
+    assignment.to_csv(csv_path, index=False)
+    counts = assignment['fold'].value_counts().sort_index().to_dict()
+    print(f"✓ fold 배정 저장: {csv_path} (fold 별 검증 건수 {counts})")
+    return assignment
 
 
 def freeze_backbone(model):
@@ -360,7 +409,10 @@ if __name__ == '__main__':
         data_split_random_state=args.data_split_random_state,
         test_size_ratio=args.test_size_ratio
     )
-    
+
+    # 검증은 증강 없는 사본으로 본다. train_set 을 그대로 물리면 val loss 가 흔들려 best epoch 이 제비뽑기가 된다.
+    val_set = dl_cls_dataset.make_eval_dataset(train_set, args.img_size)
+
     # 실제 클래스 수로 업데이트
     args.num_classes = len(unique_labels)
     print(f"AS Train 데이터셋 로드 완료. 클래스 수: {args.num_classes}")
@@ -380,17 +432,16 @@ if __name__ == '__main__':
         f.write(str(vars(args)))
 
     print("START TRAINING")
-    fold = 1
     train_labels = [train_set[i]['labels'] for i in range(len(train_set))]
-    
-    for train_idx, val_idx in cv.split(train_set, train_labels):
+    splits = list(cv.split(train_set, train_labels))
+    save_fold_assignment(train_set, splits, args_path)
+
+    for fold, (train_idx, val_idx) in enumerate(splits, start=1):
         print(f"\nCross Validation Fold {fold}")
 
         train_sampler = SubsetRandomSampler(train_idx)
         val_sampler = SubsetRandomSampler(val_idx)
         train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=False, sampler=train_sampler, num_workers=6)
-        val_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=False, sampler=val_sampler)
+        val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, sampler=val_sampler)
 
         train(args, train_loader, val_loader, fold)
-
-        fold += 1
