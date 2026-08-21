@@ -11,6 +11,17 @@ from gated_models.gated_trainer import GatedFusionTrainer
 from gated_models.gated_feature_extractor import GatedFeatureExtractor
 
 
+def _drop_stale_rows(summary_df, current_models):
+    """이전 실행이 남긴 행을 요약 CSV 에서 걸러낸다.
+
+    출력 디렉토리를 재사용하면 옛 후보 이름의 행이 그대로 살아남아 이번 실행의 행과 섞인다.
+    """
+    stale_models = [name for name in summary_df.index if name not in current_models]
+    if stale_models:
+        print(f"  이전 실행의 행 제거: {', '.join(str(name) for name in stale_models)}")
+    return summary_df.drop(index=stale_models)
+
+
 def run_gated_fusion_analysis(combined_features_df, fold_name, mode, fold_output_dir):
     """Gated Fusion 방식으로 분석 수행
 
@@ -21,6 +32,9 @@ def run_gated_fusion_analysis(combined_features_df, fold_name, mode, fold_output
         fold_output_dir (str): Fold 출력 디렉토리
     """
     print(f"\n  [Fold {fold_name}] Gated Fusion 모델 학습 중...")
+
+    # 요약 CSV 의 행 이름이자 정렬 순서다.
+    current_models = ['GatedMLP'] + Config.CLASSIFICATION_MODELS
 
     # DL Classification과 동일하게: Train (data_source='train')만 사용하여 5-fold split
     if 'data_source' not in combined_features_df.columns:
@@ -143,9 +157,12 @@ def run_gated_fusion_analysis(combined_features_df, fold_name, mode, fold_output
             summary_path = os.path.join(fold_output_dir, 'model_validation_summary.csv')
             if os.path.exists(summary_path):
                 existing_df = pd.read_csv(summary_path, index_col='Model')
+                existing_df = _drop_stale_rows(existing_df, current_models)
                 gated_mlp_df = pd.DataFrame(gated_mlp_results).T
                 gated_mlp_df.index.name = 'Model'
-                combined_df = pd.concat([existing_df, gated_mlp_df]).sort_index()
+                combined_df = pd.concat([existing_df, gated_mlp_df])
+                combined_df = combined_df[~combined_df.index.duplicated(keep='last')]
+                combined_df = combined_df.reindex([m for m in current_models if m in combined_df.index])
                 combined_df.to_csv(summary_path)
                 print(f"  GatedMLP 결과를 model_validation_summary.csv에 병합: {summary_path}")
             else:
@@ -283,6 +300,7 @@ def run_gated_fusion_analysis(combined_features_df, fold_name, mode, fold_output
     if os.path.exists(summary_path):
         # 기존 파일 읽기 (GatedMLP 포함)
         existing_df = pd.read_csv(summary_path, index_col='Model')
+        existing_df = _drop_stale_rows(existing_df, current_models)
 
         # ML 분류기 결과 추가
         ml_df = pd.DataFrame({
@@ -300,12 +318,13 @@ def run_gated_fusion_analysis(combined_features_df, fold_name, mode, fold_output
         combined_df = combined_df[~combined_df.index.duplicated(keep='last')]
 
         # 원하는 순서로 정렬
-        desired_order = ['GatedMLP', 'LR', 'MLP1', 'MLP2']
-        available_models = [m for m in desired_order if m in combined_df.index]
-        other_models = sorted([m for m in combined_df.index if m not in desired_order])
-        final_order = available_models + other_models
+        combined_df = combined_df.reindex([m for m in current_models if m in combined_df.index])
 
-        combined_df = combined_df.reindex(final_order)
+        # 학습이 행을 통째로 못 내면 GatedMLP 한 줄짜리 요약이 정상 종료로 남는다.
+        absent = [name for name in current_models if name not in combined_df.index]
+        if absent:
+            raise RuntimeError(f"model_validation_summary.csv 에 이번 실행의 행이 없다: {', '.join(absent)}")
+
         combined_df.to_csv(summary_path)
         print(f"  ML 분류기 결과를 model_validation_summary.csv에 병합: {summary_path}")
     else:
