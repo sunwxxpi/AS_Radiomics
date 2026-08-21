@@ -280,24 +280,11 @@ def prepare_as_data(data_split_mode='fix', data_split_random_state=42, test_size
     return train_df, test_df, label_to_idx, idx_to_label, unique_labels
 
 
-def get_as_dataset(img_size, mode='train', data_split_mode='fix', data_split_random_state=42, test_size_ratio=0.4):
-    """AS 데이터셋을 위한 새로운 함수
-    
-    Args:
-        img_size: 이미지 크기
-        mode: 데이터셋 모드 ('train', 'test', 'val')
-        data_split_mode: 분할 모드 ('fix' 또는 'random')
-        data_split_random_state: 랜덤 시드 (random 모드에서만 사용)
-        test_size_ratio: 테스트 데이터 비율 (random 모드에서만 사용)
+def build_transforms(img_size):
+    """학습용·평가용 transform 한 쌍.
+
+    평가용은 정규화와 리사이즈뿐이라 같은 케이스를 몇 번 읽어도 같은 텐서가 나온다.
     """
-    
-    # 데이터 준비
-    train_df, test_df, label_to_idx, idx_to_label, unique_labels = prepare_as_data(
-        data_split_mode=data_split_mode,
-        data_split_random_state=data_split_random_state,
-        test_size_ratio=test_size_ratio
-    )
-    
     # nnUNet plans 파일에서 intensity properties 로드 시도
     intensity_props = None
     if hasattr(Config, 'DL_NNUNET_CONFIG') and Config.DL_NNUNET_CONFIG:
@@ -349,7 +336,45 @@ def get_as_dataset(img_size, mode='train', data_split_mode='fix', data_split_ran
         ct_normalization,
         Resize(img_size, mode='trilinear')
     ])
+
+    return train_transform, test_transform
+
+
+def make_eval_dataset(dataset, img_size):
+    """넘겨받은 dataset 의 파일 목록에 평가용 transform 만 단 사본.
+
+    5-fold 검증이 학습용 증강을 받으면 val loss 에 무작위 성분이 섞여 `best_val_loss` 가 고르는 epoch 이 흔들린다.
+    파일 목록을 다시 수집하지 않고 그대로 넘겨받아 두 사본의 인덱스가 같은 케이스를 가리키는 것을 보장한다.
+    """
+    _, test_transform = build_transforms(img_size)
+    return ASDataset(
+        image_files=dataset.image_files,
+        labels=dataset.labels,
+        label_to_idx=dataset.label_to_idx,
+        transform=test_transform
+    )
+
+
+def get_as_dataset(img_size, mode='train', data_split_mode='fix', data_split_random_state=42, test_size_ratio=0.4):
+    """AS 데이터셋을 위한 새로운 함수
     
+    Args:
+        img_size: 이미지 크기
+        mode: 데이터셋 모드 ('train', 'test', 'val')
+        data_split_mode: 분할 모드 ('fix' 또는 'random')
+        data_split_random_state: 랜덤 시드 (random 모드에서만 사용)
+        test_size_ratio: 테스트 데이터 비율 (random 모드에서만 사용)
+    """
+    
+    # 데이터 준비
+    train_df, test_df, label_to_idx, idx_to_label, unique_labels = prepare_as_data(
+        data_split_mode=data_split_mode,
+        data_split_random_state=data_split_random_state,
+        test_size_ratio=test_size_ratio
+    )
+    
+    train_transform, test_transform = build_transforms(img_size)
+
     if mode == 'train':
         # 훈련 데이터 반환
         return ASDataset(

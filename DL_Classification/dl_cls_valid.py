@@ -49,6 +49,7 @@ def validate(config, model, val_loader, criterion):
     print("START VALIDATION")
 
     epoch_loss = 0
+    n_samples = 0
     y_true, y_score = [], []
 
     cm = torch.zeros((config.num_classes, config.num_classes))
@@ -63,6 +64,7 @@ def validate(config, model, val_loader, criterion):
 
                 loss = criterion(output, labels)
                 epoch_loss += loss.item() * images.size(0)  # accumulate loss over batch
+                n_samples += images.size(0)
 
                 pred = output.argmax(dim=1)
                 y_true.extend(labels.cpu().numpy())
@@ -73,7 +75,8 @@ def validate(config, model, val_loader, criterion):
                 # Update progress bar
                 pbar.update(1)
 
-    avg_epoch_loss = epoch_loss / len(val_loader.dataset)
+    # sampler 로 자른 뒤의 건수로 나눈다. len(dataset) 은 fold 로 나누기 전의 development 전체다.
+    avg_epoch_loss = epoch_loss / n_samples
     print(f'Validation - Avg Loss: {avg_epoch_loss:.4f}')
 
     # Calculate metrics
