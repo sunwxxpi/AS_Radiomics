@@ -22,7 +22,7 @@ def run_pipeline():
 
     워크플로우:
         1. Radiomics 특징 추출 (한 번만)
-        2. Fold별 DL embedding 추가
+        2. DL embedding 추가 (development 는 OOF fold 모델, test 는 refit 모델)
         3. 특징 융합 (일반 Concat 또는 Gated Fusion)
         4. 전통적 ML 분류기 학습 및 평가
     """
@@ -57,21 +57,26 @@ def run_pipeline():
         
         # 2. DL 모델 경로 확인
         dl_model_paths = {}
+        fold_assignment_path = None
         if Config.ENABLE_DL_EMBEDDING:
             dl_model_paths = Config.get_dl_model_paths()
+            dl_model_paths['refit'] = Config.get_dl_refit_model_path()
+            fold_assignment_path = Config.get_dl_fold_assignment_path()
             print(f"  DL Embedding 활성화: {Config.DL_MODEL_TYPE} 모델 사용")
             
             missing_models = []
-            for fold, path in dl_model_paths.items():
+            for source, path in dl_model_paths.items():
                 if not os.path.exists(path):
-                    missing_models.append(f"Fold {fold}: {path}")
+                    missing_models.append(f"{source}: {path}")
+            if not os.path.exists(fold_assignment_path):
+                missing_models.append(f"fold 배정: {fold_assignment_path}")
             
             if missing_models:
-                print(f"  경고: 다음 DL 모델 파일들을 찾을 수 없습니다:")
+                print(f"  경고: 다음 DL 산출물을 찾을 수 없습니다:")
                 for missing in missing_models:
                     print(f"    - {missing}")
                 
-                if len(missing_models) == len(dl_model_paths):
+                if len(missing_models) == len(dl_model_paths) + 1:
                     print("  모든 DL 모델이 없으므로 DL embedding 없이 계속 진행합니다.")
                     Config.ENABLE_DL_EMBEDDING = False
                     dl_model_paths = {}
@@ -83,6 +88,10 @@ def run_pipeline():
                         print("  Gated Fusion / Ensemble 도 비활성화하고 Radiomics 전용으로 진행합니다.")
                         Config.USE_GATED_FUSION = False
                         Config.USE_ENSEMBLE = False
+                else:
+                    # OOF 는 development 케이스마다 자기 fold 모델이 있어야 성립한다.
+                    # 빠진 행만 radiomics 로 남으면 다음 단계가 특징 개수를 착각한 채 돈다.
+                    raise RuntimeError("DL 산출물이 일부만 있어 OOF embedding 을 만들 수 없습니다.")
         else:
             print("  DL Embedding 비활성화")
             
@@ -121,33 +130,33 @@ def run_pipeline():
         radiomics_df = pd.concat([train_radiomics_df, val_radiomics_df], axis=0)
         print(f"  총 {len(radiomics_df)} 개의 샘플 병합됨 (TR: {len(train_radiomics_df)}, VAL: {len(val_radiomics_df)})")
 
-        # 5. Fold별 DL embedding 특징 추가 및 분석
+        # 5. DL embedding 특징 추가 및 분석
         if Config.ENABLE_DL_EMBEDDING and dl_model_paths:
-            print("\n--- 4. Fold별 DL Embedding 특징 추가 및 분석 ---")
+            print("\n--- 4. DL Embedding 특징 추가 및 분석 (development OOF · test refit) ---")
             
-            # 각 fold에 대해 독립적인 분석 수행
-            for fold in sorted(dl_model_paths.keys()):
-                print(f"\n=== Fold {fold} 분석 시작 ===")
+            combined_features_df = extractor.add_oof_dl_features_to_radiomics(radiomics_df, fold_assignment_path)
+            
+            # 클래스 분포 확인
+            if 'severity' in combined_features_df.columns:
+                print("\n--- OOF 데이터셋 'severity' 분포 ---")
+                severity_counts = combined_features_df['severity'].value_counts(dropna=False)
                 
-                # 해당 fold의 DL embedding을 Radiomics에 추가
-                combined_features_df = extractor.add_dl_features_to_radiomics(radiomics_df, fold)
-                
-                # 클래스 분포 확인
-                if 'severity' in combined_features_df.columns:
-                    print(f"\n--- Fold {fold} 데이터셋 'severity' 분포 ---")
-                    severity_counts = combined_features_df['severity'].value_counts(dropna=False)
-                    
-                    if mode == 'multi':
-                        class_order = ['normal', 'nonsevere', 'severe']
-                        ordered_counts = pd.Series({cls: severity_counts.get(cls, 0) for cls in class_order if cls in severity_counts.index})
-                        print(ordered_counts)
-                    else:
-                        severity_distribution = severity_counts.sort_index()
-                        print(severity_distribution)
-                    print(f"총 데이터 케이스 수: {len(combined_features_df)}")
-                
-                # fold별 전체 분석 파이프라인 실행
-                run_fold_analysis(combined_features_df, fold, mode, output_dir)
+                if mode == 'multi':
+                    class_order = ['normal', 'nonsevere', 'severe']
+                    ordered_counts = pd.Series({cls: severity_counts.get(cls, 0) for cls in class_order if cls in severity_counts.index})
+                    print(ordered_counts)
+                else:
+                    severity_distribution = severity_counts.sort_index()
+                    print(severity_distribution)
+                print(f"총 데이터 케이스 수: {len(combined_features_df)}")
+            
+            if Config.USE_GATED_FUSION:
+                # gated stage 1 은 자기 5-fold 로 조기 종료를 판단하므로 fold 번호를 받아야 한다.
+                # embedding 은 OOF 한 벌이고 여기서 도는 것은 gated 자신의 CV 다.
+                for gated_fold in range(1, 6):
+                    run_fold_analysis(combined_features_df, gated_fold, mode, output_dir)
+            else:
+                run_fold_analysis(combined_features_df, 'oof', mode, output_dir)
         else:
             print("\n--- 4. Radiomics 전용 분석 ---")
             # DL embedding 없이 Radiomics만으로 분석
@@ -265,13 +274,13 @@ def run_fold_analysis(features_df, fold_name, mode, base_output_dir):
         if Config.USE_ENSEMBLE and Config.ENABLE_DL_EMBEDDING and fold_name != 'Radiomics_Only':
             print(f"\n  --- {fold_name} Soft Voting Ensemble 수행 ---")
             try:
-                # DL 결과 디렉토리 경로
-                dl_results_dir = f'./DL_Classification/results/{Config.DL_COMMENT_WRITER}'
+                # test 확률은 refit 모델 하나에서 나온다. fold 별 확률은 DL 팔 내부 점검용이다.
+                dl_probs_path = os.path.join('./DL_Classification', 'results', Config.DL_COMMENT_WRITER, 'probs', 'refit.csv')
 
                 # Ensemble 수행
                 run_ensemble_for_fold(
                     fold=fold_name,
-                    dl_results_dir=dl_results_dir,
+                    dl_probs_path=dl_probs_path,
                     radiomics_results_dir=fold_output_dir,
                     classification_mode=mode,
                     models=Config.CLASSIFICATION_MODELS,

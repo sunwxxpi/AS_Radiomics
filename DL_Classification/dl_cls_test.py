@@ -66,22 +66,22 @@ def calculate_metrics(labels, probs, class_names):
     return accuracy, f1, auc, ap
 
 
-def evaluate_single_fold(labels, probs, class_names, config, fold_number):
-    """단일 fold 성능 평가 및 혼동행렬 저장"""
+def evaluate_single_run(labels, probs, class_names, config, run_label):
+    """가중치 하나의 성능 평가 및 혼동행렬 저장"""
     accuracy, f1, auc, ap = calculate_metrics(labels, probs, class_names)
     preds = np.argmax(probs, axis=1)
     
     class_report = classification_report(labels, preds, target_names=class_names)
     conf_matrix = confusion_matrix(labels, preds)
 
-    print(f'\n=== Fold {fold_number} Results ===')
+    print(f'\n=== {run_label} Results ===')
     print(f'Accuracy: {accuracy:.4f} | F1: {f1:.4f} | AUC: {auc:.4f} | AP: {ap:.4f}')
     print(f'\nClassification Report:')
     print(class_report)
 
     # 혼동행렬 시각화 저장
     output_path = os.path.join('./DL_Classification', 'results', config.writer_comment)
-    conf_matrix_plot_path = os.path.join(output_path, 'conf_matrix', f'fold_{fold_number}.png')
+    conf_matrix_plot_path = os.path.join(output_path, 'conf_matrix', f'{run_label}.png')
     plot_confusion_matrix(conf_matrix, class_names, accuracy, f1, auc, ap, conf_matrix_plot_path)
 
 
@@ -148,7 +148,7 @@ def generate_cam_for_samples(model, cam_data_list, class_names, cam_save_dir):
     print(f"--- CAM 생성 완료: {successful_count}/{len(cam_data_list)}개 성공 ---")
 
 
-def save_probabilities_csv(case_ids, labels, probs, class_names, config, fold_number):
+def save_probabilities_csv(case_ids, labels, probs, class_names, config, run_label):
     """확률값을 CSV 파일로 저장 (앙상블용)
 
     Args:
@@ -157,7 +157,7 @@ def save_probabilities_csv(case_ids, labels, probs, class_names, config, fold_nu
         probs: 예측 확률 배열 (N x num_classes)
         class_names: 클래스 이름 리스트
         config: 설정 객체
-        fold_number: fold 번호
+        run_label: 파일 이름에 붙일 갈래 이름 ('fold_1' 또는 'refit')
     """
     # probs 디렉토리 생성
     probs_dir = os.path.join('./DL_Classification', 'results', config.writer_comment, 'probs')
@@ -179,11 +179,11 @@ def save_probabilities_csv(case_ids, labels, probs, class_names, config, fold_nu
     # case_id 기준으로 정렬
     df = df.sort_values(by='case_id').reset_index(drop=True)
 
-    output_path = os.path.join(probs_dir, f'fold_{fold_number}.csv')
+    output_path = os.path.join(probs_dir, f'{run_label}.csv')
     df.to_csv(output_path, index=False)
 
 
-def run_inference(model, test_loader, device, fold_number, max_cam_samples=10):
+def run_inference(model, test_loader, device, run_label, max_cam_samples=10):
     """모델 추론을 실행하고, 결과 및 CAM 생성용 데이터를 반환"""
     all_probs = []
     all_labels = []
@@ -193,7 +193,7 @@ def run_inference(model, test_loader, device, fold_number, max_cam_samples=10):
     model.eval()
     try:
         with torch.no_grad():
-            for pack in tqdm(test_loader, desc=f'Testing Fold {fold_number}', unit='batch'):
+            for pack in tqdm(test_loader, desc=f'Testing {run_label}', unit='batch'):
                 images = pack['imgs'].to(device)
                 labels = pack['labels'].to(device)
                 names = pack['names']
@@ -223,6 +223,38 @@ def run_inference(model, test_loader, device, fold_number, max_cam_samples=10):
         torch.cuda.empty_cache()
 
     return all_labels, np.concatenate(all_probs, axis=0), all_case_ids, cam_data_list
+
+
+def evaluate_weights(config, model_path, test_loader, device, run_label, class_names, should_save_cam):
+    """가중치 하나로 test 를 추론해 혼동행렬·확률 CSV·CAM 을 남기고 (labels, probs) 를 돌려준다.
+
+    가중치 파일이 없으면 None 을 돌려준다.
+    """
+    if not os.path.exists(model_path):
+        print(f"{run_label} 모델 파일 없음. 건너뜀: {model_path}")
+        return None
+
+    model = create_model(config)
+    model.load_state_dict(torch.load(model_path))
+
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
+    model = model.to(device)
+
+    labels, probs, case_ids, cam_samples = run_inference(
+        model, test_loader, device, run_label, max_cam_samples=20
+    )
+
+    evaluate_single_run(labels, probs, class_names, config, run_label)
+    save_probabilities_csv(case_ids, labels, probs, class_names, config, run_label)
+    print(f"{run_label} 확률값 저장 완료.")
+
+    if should_save_cam and cam_samples:
+        cam_save_dir = os.path.join('./DL_Classification', 'results', config.writer_comment, 'cam_visualization', run_label)
+        os.makedirs(cam_save_dir, exist_ok=True)
+        generate_cam_for_samples(model, cam_samples, class_names, cam_save_dir)
+
+    return labels, probs
 
 
 def main():
@@ -261,48 +293,30 @@ def main():
     print(f"CAM 생성: {'활성화' if should_save_cam else '비활성화'}")
 
     # 각 fold 평가
-    for fold in range(1, config.fold + 1):
-        print(f"\n{'='*20} Fold {fold} 평가 시작 {'='*20}")
-        model_path = os.path.join(config.model_path, config.writer_comment, str(fold), 'best_model.pth')
-        
-        if not os.path.exists(model_path):
-            print(f"Fold {fold} 모델 파일 없음. 건너뜀.")
-            continue
-        
-        # MODEL
-        model = create_model(config)
-        model.load_state_dict(torch.load(model_path))
-        
-        if torch.cuda.device_count() > 1:
-            model = nn.DataParallel(model)
-        model = model.to(device)
-        
-        # 1. 추론 실행 (결과 및 CAM 샘플 데이터 확보)
-        fold_labels, fold_probs, fold_case_ids, cam_samples = run_inference(
-            model, test_loader, device, fold, max_cam_samples=20
-        )
+    if config.stage in ('all', 'folds'):
+        for fold in range(1, config.fold + 1):
+            print(f"\n{'='*20} Fold {fold} 평가 시작 {'='*20}")
+            model_path = os.path.join(config.model_path, config.writer_comment, str(fold), 'best_model.pth')
 
-        # 2. Confusion Matrix 생성 및 단일 Fold 평가
-        if fold == 1:
-            all_fold_labels = fold_labels
-        all_fold_probs.append(fold_probs)
-        evaluate_single_fold(fold_labels, fold_probs, class_names, config, fold)
-        print(f"Fold {fold} Confusion Matrix 및 평가 완료.")
+            result = evaluate_weights(config, model_path, test_loader, device, f'fold_{fold}', class_names, should_save_cam)
+            if result is None:
+                continue
 
-        # 3. 확률값 CSV 저장 (앙상블용)
-        save_probabilities_csv(fold_case_ids, fold_labels, fold_probs, class_names, config, fold)
-        print(f"Fold {fold} 확률값 저장 완료.")
+            fold_labels, fold_probs = result
+            if not all_fold_labels:
+                all_fold_labels = fold_labels
+            all_fold_probs.append(fold_probs)
 
-        # 4. CAM 이미지 생성
-        if should_save_cam and cam_samples:
-            cam_save_dir = os.path.join('./DL_Classification', 'results', config.writer_comment, 'cam_visualization', f'fold_{fold}')
-            os.makedirs(cam_save_dir, exist_ok=True)
-            generate_cam_for_samples(model, cam_samples, class_names, cam_save_dir)
+        # 앙상블 평가
+        if all_fold_probs:
+            print(f"\n{'='*20} 앙상블 평가 시작 {'='*20}")
+            evaluate_ensemble(all_fold_labels, np.array(all_fold_probs), class_names, config)
 
-    # 앙상블 평가
-    if all_fold_probs:
-        print(f"\n{'='*20} 앙상블 평가 시작 {'='*20}")
-        evaluate_ensemble(all_fold_labels, np.array(all_fold_probs), class_names, config)
+    # refit 평가. 논문 2.4 가 test 추론을 refit 모델 하나로 못박으므로 DL-only 성적과 ensemble 확률은 여기서 나온다.
+    if config.stage in ('all', 'refit'):
+        print(f"\n{'='*20} refit 평가 시작 {'='*20}")
+        model_path = os.path.join(config.model_path, config.writer_comment, 'refit', 'refit_model.pth')
+        evaluate_weights(config, model_path, test_loader, device, 'refit', class_names, should_save_cam)
 
 
 if __name__ == '__main__':

@@ -32,7 +32,6 @@ class Config:
     DL_IMG_SIZE = (32, 384, 320)        # 입력 이미지 크기 (D, H, W): nnUNet(32,384,320), Med3D(56,448,448)
     IMG_SIZE_DEPTH, IMG_SIZE_HEIGHT, IMG_SIZE_WIDTH = DL_IMG_SIZE
     DL_COMMENT_WRITER = f'{DL_MODEL_TYPE}_{IMG_SIZE_DEPTH}_{IMG_SIZE_HEIGHT}_{IMG_SIZE_WIDTH}'
-    FOLD = None                         # None: 전체 fold(1-5) 사용, 정수: 특정 fold만 사용
     
     # nnUNet 관련 설정 (DL_MODEL_TYPE이 'nnunet'인 경우)
     DL_NNUNET_CONFIG = {
@@ -60,22 +59,30 @@ class Config:
     
     @classmethod
     def get_dl_model_paths(cls):
-        """FOLD 설정에 따라 DL 모델 경로 딕셔너리 반환
+        """5-fold 가중치 경로를 `{fold 번호: 경로}` 로 만든다.
 
-        Returns:
-            dict: {fold: model_path} 형태의 딕셔너리
+        development 행의 OOF embedding 은 케이스마다 자기를 검증으로 뺀 fold 를 골라 쓰므로 다섯 개가 다 있어야 한다.
         """
-        if cls.FOLD is None:
-            # 전체 fold (1-5) 사용
-            return {
-                fold: f'./DL_Classification/weights/{cls.DL_COMMENT_WRITER}/{fold}/best_model.pth'
-                for fold in range(1, 6)
-            }
-        else:
-            # 특정 fold만 사용
-            return {
-                cls.FOLD: f'./DL_Classification/weights/{cls.DL_COMMENT_WRITER}/{cls.FOLD}/best_model.pth'
-            }
+        return {
+            fold: f'./DL_Classification/weights/{cls.DL_COMMENT_WRITER}/{fold}/best_model.pth'
+            for fold in range(1, 6)
+        }
+
+    @classmethod
+    def get_dl_refit_model_path(cls):
+        """development 322 전체로 다시 학습한 가중치 경로.
+
+        test 추론과 test 행 embedding 은 이 하나만 쓴다. development 행은 그 케이스를 학습에 안 쓴 fold 모델로 뽑는다.
+        """
+        return f'./DL_Classification/weights/{cls.DL_COMMENT_WRITER}/refit/refit_model.pth'
+
+    @classmethod
+    def get_dl_fold_assignment_path(cls):
+        """development 케이스가 어느 fold 의 검증이었는지 적힌 CSV 경로.
+
+        OOF embedding 은 이 배정으로 케이스마다 모델을 고르므로, DL 학습이 남긴 파일과 짝이 맞지 않으면 조용히 다른 분할이 된다.
+        """
+        return f'./DL_Classification/weights/{cls.DL_COMMENT_WRITER}/cls_fold_assignment.csv'
 
     # 모델 하이퍼파라미터
     RANDOM_STATE = 42
@@ -280,10 +287,7 @@ class Config:
             print(f"융합 방식: {fusion_type}")
             print(f"DL 모델 타입: {cls.DL_MODEL_TYPE}")
             print(f"DL 이미지 크기: {cls.DL_IMG_SIZE}")
-            if cls.FOLD is None:
-                print(f"사용 Fold: 전체 (1-5)")
-            else:
-                print(f"사용 Fold: {cls.FOLD}")
+            print("DL embedding 출처: development=fold 1-5 OOF, test=refit")
         print(f"Soft Voting Ensemble 사용: {cls.USE_ENSEMBLE}")
         print(f"CV 폴드 수: {cls.CV_FOLDS}")
         print("========================")

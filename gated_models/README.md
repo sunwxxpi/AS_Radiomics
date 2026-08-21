@@ -435,8 +435,9 @@ train_config = {
 Config.get_dl_model_paths()
 ```
 
-- **일부 fold** 가중치만 없으면: 경고만 출력하고 해당 fold 의 DL embedding 추출기를 만들지 않는다.
-- **모든 fold** 가중치가 없으면: `main.py` 가 `ENABLE_DL_EMBEDDING` 과 함께 `USE_GATED_FUSION` / `USE_ENSEMBLE` 도 False 로 되돌리고 Radiomics 전용으로 진행한다. 이 경우 결과 디렉토리 이름에는 `_gated` 가 남아 있어도 Gated Fusion 산출물(`fold_N_best_model.pth` 등)은 생성되지 않는다.
+- **일부만** 없으면: `main.py` 가 예외를 내고 멈춘다. OOF embedding 은 fold 5개 가중치 · refit 가중치 · fold 배정 CSV 가 모두 있어야 성립한다.
+- **전부** 없으면: `main.py` 가 `ENABLE_DL_EMBEDDING` 과 함께 `USE_GATED_FUSION` / `USE_ENSEMBLE` 도 False 로 되돌리고 Radiomics 전용으로 진행한다.
+  이 경우 결과 디렉토리 이름에는 `_gated` 가 남아 있어도 Gated Fusion 산출물(`fold_N_best_model.pth` 등)은 생성되지 않는다.
 
 ### Fold 번호 불일치
 

@@ -18,18 +18,29 @@ tensorboard --logdir DL_Classification/logs/{writer_comment}
 
 `{writer_comment}` 는 `--writer_comment` 값이고, 생략하면 `{model_type}_{D}_{H}_{W}` 가 된다 (`main.py` 쪽에서는 `Config.DL_COMMENT_WRITER` 가 같은 값을 가리킨다).
 
+`dl_cls_train.py` 는 5-fold 를 돌린 뒤 development 전체로 refit 까지 이어서 한다 — GPU 학습 6회다.
+`--stage folds` / `--stage refit` 로 끊어 돌릴 수 있고, `refit` 은 5-fold 가 남긴 `weights/{writer_comment}/fold_best_epochs.csv` 를 읽어 종료 epoch 을 정한다.
+refit 종료 epoch 은 fold 별 best epoch 다섯 값의 중앙값이고, 같은 값이 cosine 스케줄의 끝점으로도 들어간다.
+
+`dl_cls_test.py` 도 같은 `--stage` 를 받는다. test 추론은 refit 모델 하나로 하고, fold 5개 평가는 DL 팔 내부 점검용이다.
+융합 갈래가 읽는 DL 확률은 refit 것(`results/{writer_comment}/probs/refit.csv`) 하나다.
+
 `main.py` 의 갈래는 `config.py` 의 세 플래그로 정한다.
 
 | 갈래 | `ENABLE_DL_EMBEDDING` | `USE_GATED_FUSION` | `USE_ENSEMBLE` | 선행 조건 |
 | --- | --- | --- | --- | --- |
 | Radiomics 단독 | False | False | False | 없음 |
-| Concat fusion | True | False | False | DL 가중치 5-fold |
-| Gated fusion | True | True | False | DL 가중치 5-fold |
-| Soft voting ensemble | True | False | True | `dl_cls_test.py` 가 만든 probs CSV |
+| Concat fusion | True | False | False | fold 5개 + refit 가중치 + fold 배정 CSV |
+| Gated fusion | True | True | False | fold 5개 + refit 가중치 + fold 배정 CSV |
+| Soft voting ensemble | True | False | True | 위에 더해 `dl_cls_test.py` 가 만든 `probs/refit.csv` |
 
-- DL 임베딩을 쓰는 갈래는 fold 별 가중치를 바꿔 5회 평가한다. 데이터 분할은 고정 hold-out 이고 교차검증이 아니다.
+- DL 임베딩은 케이스마다 출처가 다르다. development 행은 그 행을 검증으로 뺀 fold 모델(OOF)로, test 행은 refit 모델로 뽑는다. 임베딩은 한 벌이다.
+  development 행에 그 행을 학습에 쓴 모델의 임베딩을 주면 융합 분류기가 test 에는 없을 과적합된 표현 위에서 학습된다.
+  배정은 `weights/{writer_comment}/cls_fold_assignment.csv` 를 따르고, 산출물이 일부만 있거나 배정과 어긋나는 케이스가 있으면 추출 전에 멈춘다.
+- 데이터 분할은 고정 hold-out 이고 교차검증이 아니다.
 - Gated 를 켜면 Ensemble 은 실행되지 않는다 — `main.py` 가 gated 분석 직후 반환한다.
 - Gated 는 two-stage 다. Stage 1 이 `GatedFusionLayer` + MLP 를 학습하고, Stage 2 가 fused feature(radiomics 107 + DL 320 = 427)로 LR/SVM/RF 를 학습한다.
+  Stage 1 이 조기 종료를 판단할 검증 fold 가 필요해 gated 갈래만 자기 5-fold 를 돌아 결과가 다섯 벌 나온다. 나머지 갈래는 한 벌이다.
 
 ## 데이터
 
@@ -98,6 +109,7 @@ segmentation 학습 자체는 이 저장소에서 돌지 않는다.
 | Segmentation (nnU-Net) | fold 별 200 | fold 별 50 | 공통 83 (OOF 예측으로 평가) |
 | Classification (ML) `main.py` | 322 | 322 내부 CV (특징 선택 전용) | 83 |
 | Classification (DL) `dl_cls_train.py` | fold 별 257~258 | fold 별 64~65 | 83 |
+| Classification (DL refit) `dl_cls_train.py` | 322 | 없음 (종료 epoch 은 5-fold 에서 온다) | 83 |
 
 ## 설정 (`config.py:Config`)
 
@@ -114,7 +126,6 @@ segmentation 학습 자체는 이 저장소에서 돌지 않는다.
 | `DL_MODEL_TYPE` | `'nnunet'` | `'nnunet'` \| `'custom'`(MONAI ResNet50) |
 | `DL_IMG_SIZE` | `(32, 384, 320)` | (D, H, W). nnUNet 사전학습 patch size. custom 은 `(56, 448, 448)` |
 | `DL_COMMENT_WRITER` | `f'{type}_{D}_{H}_{W}'` | 가중치·결과 디렉토리 이름. 데이터셋이 바뀌어도 그대로이므로 직접 바꾼다 |
-| `FOLD` | `None` | `None`=fold 1~5 전부, 정수면 그 fold 만 |
 | `RESAMPLED_SPACING` | `[0.3828125, 0.3828125, 3.0]` | radiomics 추출 전 목표 spacing `[x, y, z]` mm. `None` 이면 원본 |
 | `ENABLE_DILATION` / `DILATION_ITERATIONS` | `False` / `1` | 마스크 팽창. 켜면 결과 디렉토리 이름에 `_dil{N}` 이 붙는다 |
 | `FEATURE_SELECTION_METHOD` | `'lasso'` | `'lasso'`/`'rfe'`/`'univariate'`/`'mutual_info'`/`'random_forest'`/`'none'` |
@@ -139,14 +150,17 @@ radiomics_analysis_results/{dataset_type}/{feature_method}/{mode}/{run_name}/[fo
 
 DL_Classification/
 ├── weights/{writer_comment}/cls_fold_assignment.csv # development 322 의 patient_id → fold
+├── weights/{writer_comment}/fold_best_epochs.csv   # fold 별 best epoch. refit 종료 epoch 의 근거
 ├── weights/{writer_comment}/{1..5}/best_model.pth   # 융합 갈래 세 개의 선행 조건
-├── logs/{writer_comment}/{1..5}/                    # TensorBoard
-└── results/{writer_comment}/probs/fold_{N}.csv      # ensemble 의 선행 조건
+├── weights/{writer_comment}/refit/refit_model.pth   # development 322 전체로 다시 학습한 모델
+├── logs/{writer_comment}/{1..5}/, logs/{writer_comment}/refit/  # TensorBoard
+├── results/{writer_comment}/probs/refit.csv         # test 확률. ensemble 의 선행 조건
+└── results/{writer_comment}/probs/fold_{N}.csv      # fold 별 test 확률. DL 팔 내부 점검용
 ```
 
 `dataset_type` 은 `BASE_DIR` 이름에서 유도된다.
 `run_name` 은 `default_` 또는 `dl{type}_{D}_{H}_{W}_` 에 `_ensemble` · `_gated` · `_dil{N}` 이 붙고 끝에 `_YYYYMMDD_HHMMSS` 가 온다.
-DL 임베딩을 쓰면 fold 마다 `fold_{N}/` 이 생기고, Radiomics 단독은 `run_name/` 직속이다.
+DL 임베딩을 쓰면 `fold_oof/` 하나가 생기고(gated 는 stage 1 의 CV fold 마다 `fold_{N}/`), Radiomics 단독은 `run_name/` 직속이다.
 
 ## 규약
 
@@ -156,5 +170,8 @@ DL 임베딩을 쓰면 fold 마다 `fold_{N}/` 이 생기고, Radiomics 단독�
 - **DL 확률 CSV 의 컬럼명은 `proba_{class}`** 다. `utils/ensemble.py` 가 이 이름으로 DL/ML 확률을 합친다.
   Gated 의 `gated_fusion_predictions.csv` 만 `prob_{class}` 를 쓰고 `case_id` 컬럼이 없다.
 - **메트릭은 multi=One-vs-Rest macro, binary=양성 `severe`** 기준이다. 새 평가 코드도 `trainer/train.py:_calculate_metrics` 와 맞춘다.
+- **증강 시드는 두 곳에서 주입된다** — `seed_torch` 의 `monai.utils.set_determinism` 이 `Compose` 가 자식 transform 에 넣을 시드를 정하고,
+  loader 의 `worker_init_fn` 이 worker·epoch 마다 그 시드를 다시 뿌린다.
+  `set_determinism` 을 transform 생성 뒤에 부르거나 `worker_init_fn` 을 빼면 같은 학습이 두 번 나오지 않는다.
 - **`RESAMPLED_SPACING` 은 `[x, y, z]` 순서**다. nnU-Net plans.json 은 `[z, y, x]` 라 그대로 옮기면 z 축을 잘못 리샘플링한다.
 - 새 하이퍼파라미터는 `Config` 클래스 속성으로 추가하고 `print_config_summary()` 에 반영한다.

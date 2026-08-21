@@ -413,18 +413,18 @@ class SoftVotingEnsemble:
 
 
 def run_ensemble_for_fold(
-    fold: int,
-    dl_results_dir: str,
+    fold,
+    dl_probs_path: str,
     radiomics_results_dir: str,
     classification_mode: str,
     models: List[str] = None,
     feature_selection_method: str = 'lasso'
 ) -> Tuple[pd.DataFrame, Dict]:
-    """특정 fold에 대한 ensemble 수행
+    """DL 확률 파일 하나와 radiomics 확률을 묶어 ensemble 수행
 
     Args:
-        fold (int): Fold 번호
-        dl_results_dir (str): DL 결과 디렉토리 (probs 폴더가 있는 경로)
+        fold: 결과 파일 이름에 붙일 갈래 이름
+        dl_probs_path (str): DL 확률 CSV 경로
         radiomics_results_dir (str): Radiomics 결과 디렉토리
         classification_mode (str): 분류 모드
         models (List[str]): 사용할 ML 모델 리스트
@@ -433,9 +433,6 @@ def run_ensemble_for_fold(
     Returns:
         Tuple[pd.DataFrame, Dict]: (앙상블 결과, 성능 메트릭)
     """
-    # DL probs 경로
-    dl_probs_path = os.path.join(dl_results_dir, 'probs', f'fold_{fold}.csv')
-
     # Radiomics probs 경로
     radiomics_probs_path = os.path.join(radiomics_results_dir, 'test_cases_prediction_results.csv')
 
