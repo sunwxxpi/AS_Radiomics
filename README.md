@@ -37,10 +37,14 @@ refit 종료 epoch 은 fold 별 best epoch 다섯 값의 중앙값이고, 같은
 - DL 임베딩은 케이스마다 출처가 다르다. development 행은 그 행을 검증으로 뺀 fold 모델(OOF)로, test 행은 refit 모델로 뽑는다. 임베딩은 한 벌이다.
   development 행에 그 행을 학습에 쓴 모델의 임베딩을 주면 융합 분류기가 test 에는 없을 과적합된 표현 위에서 학습된다.
   배정은 `weights/{writer_comment}/cls_fold_assignment.csv` 를 따르고, 산출물이 일부만 있거나 배정과 어긋나는 케이스가 있으면 추출 전에 멈춘다.
+  반대로 전부 없으면 멈추지 않고 세 플래그를 모두 False 로 되돌려 Radiomics 단독으로 진행한다. 결과 디렉토리 이름은 플래그를 되돌리기 전에 정해지므로 `_gated`/`_ensemble` 이 남은 채 그 산출물만 없다.
 - 데이터 분할은 고정 hold-out 이고 교차검증이 아니다.
 - Gated 를 켜면 Ensemble 은 실행되지 않는다 — `main.py` 가 gated 분석 직후 반환한다.
 - Gated 는 two-stage 다. Stage 1 이 `GatedFusionLayer` + MLP 를 학습하고, Stage 2 가 fused feature(radiomics 107 + DL 320 = 427)로 LR/MLP1/MLP2 를 학습한다.
   Stage 1 이 조기 종료를 판단할 검증 fold 가 필요해 gated 갈래만 자기 5-fold 를 돌아 결과가 다섯 벌 나온다. 나머지 갈래는 한 벌이다.
+  게이트는 concat 한 427 차원에 `g ⊗ tanh(W_h x + b_h)` (`g = σ(W_g x + b_g)`) 를 적용해 차원마다 가중치를 학습한다. 출력 차원은 입력과 같은 427 이다.
+  Stage 1 의 MLP 헤드는 게이트에 supervision 을 주기 위한 것이고 Stage 2 에서는 쓰지 않는다. LASSO 가 427 개를 22~61 개(기존 실행 산출물 실측값)로 줄인 뒤 sklearn 분류기가 학습한다.
+  `model_validation_summary.csv` 한 표에 두 stage 결과가 섞여 있다 — `GatedMLP` 이 Stage 1 의 torch 헤드고, `LR`/`MLP1`/`MLP2` 는 Stage 2 의 sklearn 분류기다.
 
 ## 데이터
 
@@ -113,7 +117,9 @@ segmentation 학습 자체는 이 저장소에서 돌지 않는다.
 
 ## 설정 (`config.py:Config`)
 
-`main.py` 파이프라인의 유일한 설정 소스다. DL 학습/평가는 `DL_Classification/dl_cls_config.py` 의 argparse 를 쓰지만,
+`main.py` 파이프라인의 설정 소스다. 예외가 하나 있다 — Gated Stage 1 의 학습 하이퍼파라미터(learning rate, batch size, epoch, patience)와 모델 구조(`hidden_dims=[256, 128]`, `dropout=0.3`)는
+`gated_models/gated_pipeline.py` 안에 하드코딩돼 있고, 그쪽 seed 는 `GatedFusionTrainer` 기본값 42 가 아니라 50 이다.
+DL 학습/평가는 `DL_Classification/dl_cls_config.py` 의 argparse 를 쓰지만,
 `LABEL_FILE` · `CLASSIFICATION_MODE` · `IMAGE_TR_DIR`/`IMAGE_VAL_DIR` · `DL_NNUNET_CONFIG` 는 그쪽에서도 `Config` 를 직접 읽어 CLI 로 바꿀 수 없다.
 
 | 속성 | 기본값 | 의미 |
@@ -145,6 +151,8 @@ radiomics_analysis_results/{dataset_type}/{feature_method}/{mode}/{run_name}/[fo
 ├── model_validation_summary.csv                  # 모델별 Accuracy / F1 / AUC / AP
 ├── test_cases_prediction_results.csv
 ├── radiomics_features_{all,train,test}.csv       # Gated 는 gated_fused_features_*.csv
+├── fold_{N}_best_model.pth, gated_training.log   # Gated 전용. Stage 1 체크포인트와 학습 로그
+├── gated_fusion_predictions_fold_{N}.csv         # Gated 전용. GatedMLP 예측 확률
 ├── lasso_feature_analysis.csv
 └── {model}_confusion_matrix.png, {model}_multiclass_{ROC,PR}_curve.png
 
@@ -170,6 +178,7 @@ DL 임베딩을 쓰면 `fold_oof/` 하나가 생기고(gated 는 stage 1 의 CV 
 - **DL 확률 CSV 의 컬럼명은 `proba_{class}`** 다. `utils/ensemble.py` 가 이 이름으로 DL/ML 확률을 합친다.
   Gated 의 `gated_fusion_predictions.csv` 만 `prob_{class}` 를 쓰고 `case_id` 컬럼이 없다.
 - **메트릭은 multi=One-vs-Rest macro, binary=양성 `severe`** 기준이다. 새 평가 코드도 `trainer/train.py:_calculate_metrics` 와 맞춘다.
+  `gated_trainer.py:evaluate_final_performance` 만 예외로 binary 에서도 F1 을 macro 로 계산하므로, binary 모드의 `GatedMLP` 행은 같은 표의 다른 행과 직접 비교되지 않는다.
 - **증강 시드는 두 곳에서 주입된다** — `seed_torch` 의 `monai.utils.set_determinism` 이 `Compose` 가 자식 transform 에 넣을 시드를 정하고,
   loader 의 `worker_init_fn` 이 worker·epoch 마다 그 시드를 다시 뿌린다.
   `set_determinism` 을 transform 생성 뒤에 부르거나 `worker_init_fn` 을 빼면 같은 학습이 두 번 나오지 않는다.
