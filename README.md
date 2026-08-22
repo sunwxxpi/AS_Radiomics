@@ -17,28 +17,15 @@ tensorboard --logdir DL_Classification/logs/{writer_comment}
 ```
 
 `{writer_comment}` 는 `config.py` 의 `Config.DL_COMMENT_WRITER` 하나가 정한다 — `{model_type}_{D}_{H}_{W}_{BASE_DIR 폴더 이름}` 이다.
-`--model_type` · `--img_size` · `--model_path` 는 `config.py` 의 `DL_MODEL_TYPE` · `DL_IMG_SIZE` · `DL_WEIGHTS_ROOT` 를 그대로 받는다.
-`--fold` 는 `DL_NUM_FOLDS` 를, 분할 인자 셋(`--data_split_mode` · `--data_split_random_state` · `--test_size_ratio`)은 대문자 같은 이름을 받는다.
-다른 값을 주면 경로나 분할이 어긋나므로 시작 전에 멈춘다. 모델·입력 크기·분할은 `config.py` 에서 바꾸고, `main.py` 도 이 이름으로 DL 산출물을 찾는다.
+`main.py` 도 이 이름으로 DL 산출물을 찾는다. DL 스크립트의 모델·입력 크기·경로·fold 수·분할 인자는 `config.py` 의 같은 값을 기본값으로 받고, 다르게 주면 시작 전에 멈춘다.
 
-`dl_cls_train.py` 는 5-fold 를 돌린 뒤 development 전체로 refit 까지 이어서 한다 — GPU 학습 6회다.
-`--stage folds` / `--stage refit` 로 끊어 돌릴 수 있고, `refit` 은 5-fold 가 남긴 `weights/{writer_comment}/fold_best_epochs.csv` 를 읽어 종료 epoch 을 정한다.
-refit 종료 epoch 은 fold 별 best epoch 다섯 값의 중앙값이고, 같은 값이 cosine 스케줄의 끝점으로도 들어간다.
+`dl_cls_train.py` 는 5-fold 를 돌린 뒤 development 전체로 refit 까지 한다 — GPU 학습 6회다. `--stage folds` / `--stage refit` 로 끊어 돌릴 수 있다.
+refit 종료 epoch 은 fold 별 best epoch 의 중앙값이라, `weights/{writer_comment}/fold_best_epochs.csv` 에 fold 가 `DL_NUM_FOLDS` 만큼 다 있어야 `--stage refit` 이 돈다.
+`--resume` 은 그 기록과 `best_model.pth` 가 둘 다 있는 fold 만 건너뛴다. 기록에 적힌 학습 인자나 `cls_fold_assignment.csv` 의 배정이 지금과 다르면 덮어쓰기 전에 멈춘다.
+이어 돌릴 때는 fold 를 돌릴 때 쓴 인자를 그대로 다시 넘기고, 처음부터 돌릴 때는 그 가중치 디렉토리를 먼저 지운다.
 
-`--resume` 은 `fold_best_epochs.csv` 에 기록이 있고 그 fold 의 `best_model.pth` 도 있는 fold 만 건너뛴다.
-둘 중 하나라도 없으면 그 fold 는 처음부터 다시 돈다. fold 를 돌지 않는 `--stage refit` 과 같이 주면 시작 전에 멈춘다.
-fold 가중치가 남아 있거나 `--resume` 이면 이미 있는 `cls_fold_assignment.csv` 와 지금 계산한 배정이 같은지도 본다.
-데이터가 한 건만 늘거나 줄어도 배정이 통째로 바뀌므로 덮어쓰기 전에 멈춘다. 새로 돌릴 때는 그 가중치 디렉토리를 먼저 지운다.
-`--resume` 은 `fold_best_epochs.csv` 는 있는데 배정 파일이 없으면 아예 시작하지 않는다.
-`fold_best_epochs.csv` 에는 그때 쓴 학습 인자가 `arg_*` 컬럼으로 함께 적힌다.
-빠지는 것은 경로를 정하는 `--model_path` 와 단계마다 달라지는 `--stage` · `--resume` · `--enable_cam` · `--save_model` 뿐이다.
-하나라도 지금 값과 다르면 `--resume` 도 `--stage refit` 도 그 기록을 읽지 않고 멈추므로, 이어 돌릴 때는 fold 를 돌릴 때 쓴 인자를 그대로 다시 넘긴다.
-`--stage refit` 은 fold 가 `DL_NUM_FOLDS` 만큼 다 적혀 있어야 읽는다.
-`--resume` 으로 이어 돌리면 가중치가 사라진 fold 의 줄은 기록에서 빠지므로, CSV 만 다 돈 것처럼 남지 않는다.
-
-`dl_cls_test.py` 도 같은 `--stage` 를 받는다. test 추론은 refit 모델 하나로 하고, fold 5개 평가는 DL 팔 내부 점검용이다.
-융합 갈래가 읽는 DL 확률은 refit 것(`results/{writer_comment}/probs/refit.csv`) 하나다.
-refit 가중치가 없으면 그 자리에서 멈춘다 — 그 파일 없이 성공으로 끝나지 않는다. fold 평가는 가중치가 없는 fold 만 건너뛴다.
+`dl_cls_test.py` 도 같은 `--stage` 를 받는다. 융합 갈래가 읽는 DL 확률은 refit 것(`results/{writer_comment}/probs/refit.csv`) 하나다.
+그 가중치가 없으면 그 자리에서 멈춘다. fold 5개 평가는 DL 팔 내부 점검용이라 가중치가 없는 fold 만 건너뛴다.
 
 `main.py` 의 갈래는 `config.py` 의 세 플래그로 정한다.
 
@@ -53,13 +40,10 @@ refit 가중치가 없으면 그 자리에서 멈춘다 — 그 파일 없이 �
   development 행에 그 행을 학습에 쓴 모델의 임베딩을 주면 융합 분류기가 test 에는 없을 과적합된 표현 위에서 학습된다.
   배정은 `weights/{writer_comment}/cls_fold_assignment.csv` 를 따르고, 산출물이 하나라도 없거나 배정과 어긋나는 케이스가 있으면 추출 전에 멈춘다.
   전부 없을 때도 갈래를 바꾸지 않는다. Radiomics 단독으로 돌릴 생각이면 `ENABLE_DL_EMBEDDING` 을 직접 내린다.
-  결과 디렉토리 이름과 설정 요약은 그 전에 정해지므로, 플래그를 대신 내려 주면 `_gated`/`_ensemble` 이 붙은 이름 아래 Radiomics 단독 결과가 남는다.
 - 데이터 분할은 고정 hold-out 이고 교차검증이 아니다.
 - Gated 를 켜면 Ensemble 은 실행되지 않는다 — `main.py` 가 gated 분석 직후 반환한다.
 - Gated 는 two-stage 다. Stage 1 이 `GatedFusionLayer` + MLP 를 학습하고, Stage 2 가 fused feature(radiomics 107 + DL 320 = 427)로 LR/MLP1/MLP2 를 학습한다.
   Stage 1 이 조기 종료를 판단할 검증 fold 가 필요해 gated 갈래만 자기 5-fold 를 돌아 결과가 다섯 벌 나온다. 나머지 갈래는 한 벌이다.
-  게이트는 concat 한 427 차원에 `g ⊗ tanh(W_h x + b_h)` (`g = σ(W_g x + b_g)`) 를 적용해 차원마다 가중치를 학습한다. 출력 차원은 입력과 같은 427 이다.
-  Stage 1 의 MLP 헤드는 게이트에 supervision 을 주기 위한 것이고 Stage 2 에서는 쓰지 않는다. LASSO 가 427 개를 22~61 개(기존 실행 산출물 실측값)로 줄인 뒤 sklearn 분류기가 학습한다.
   `model_validation_summary.csv` 한 표에 두 stage 결과가 섞여 있다 — `GatedMLP` 이 Stage 1 의 torch 헤드고, `LR`/`MLP1`/`MLP2` 는 Stage 2 의 sklearn 분류기다.
 
 ## 데이터
